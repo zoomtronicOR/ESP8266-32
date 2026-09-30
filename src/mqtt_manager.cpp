@@ -1,4 +1,5 @@
 #include "mqtt_manager.h"
+#include "oui.h"
 
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
@@ -239,6 +240,11 @@ void networksJson(const String& ts, Sink sink) {
         s += F(",\"security\":\"");
         s += securityName(r.enc);
         s += '"';
+        String vendor = Oui::name(r.vendor);
+        if (vendor.length()) {
+            s += F(",\"vendor\":");
+            appendJsonString(s, vendor.c_str());
+        }
         if (r.width) {
             s += F(",\"width\":");
             s += r.width;

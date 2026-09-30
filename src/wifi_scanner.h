@@ -16,6 +16,7 @@ struct ApRecord {
     uint8_t enc;       // core encryption type, see Platform::securityName
     bool hidden;
     bool discovered;   // never seen before (not in the persisted known-BSSID filter)
+    uint8_t vendor;    // Oui:: vendor index, Oui::kUnknown or Oui::kLocal
     uint8_t width;     // channel width in MHz: 20 or 40; 0 = unknown (ESP8266 scan does not report it)
     int8_t secondary;  // 40 MHz: +1 secondary channel above the primary, -1 below; 0 otherwise
     uint16_t seenCount;

@@ -18,7 +18,7 @@
 #else
 #error "Add a board block to include/config.h"
 #endif
-#define FW_VERSION "0.6.0"
+#define FW_VERSION "0.7.0"
 
 // ---- Defaults (overridable at runtime via /api/config, stored in LittleFS) ----
 #define DEFAULT_DEVICE_NAME     "wifi-monitor-01"

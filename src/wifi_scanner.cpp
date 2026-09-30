@@ -5,6 +5,7 @@
 #include "config.h"
 #include "alerts.h"
 #include "history.h"
+#include "oui.h"
 #include "storage.h"
 #include "system.h"
 
@@ -41,6 +42,7 @@ ApRecord* findOrAllocate(const uint8_t* bssid) {
     memset(slot, 0, sizeof(*slot));
     memset(slot->live, (uint8_t)RSSI_NONE, sizeof(slot->live));
     memcpy(slot->bssid, bssid, 6);
+    slot->vendor = Oui::lookup(bssid);
     slot->rssiMin = 127;
     slot->rssiMax = -128;
     slot->firstSeen = System::uptimeSeconds();

@@ -37,13 +37,14 @@ platform layer.
 **Scanning & statistics**
 - Periodic asynchronous WiFi scan (10 s – 30 min, or manual), optionally limited to one channel
 - Per access point: SSID, BSSID, channel, frequency, security, hidden flag, current / min / max / average
-  RSSI, first/last seen, seen count, and on the ESP32-C3 the channel width (20/40 MHz) and WPA3
+  RSSI, first/last seen, seen count, **vendor** (from the MAC prefix), and on the ESP32-C3 the channel width
+  (20/40 MHz) and WPA3
 - Up to 100 tracked APs by default (configurable)
 
 **Web interface** (served from the device, vanilla JS + canvas charts)
 - **Dashboard**: summary widgets, *signal strength by channel* chart (each AP drawn with its 20/40 MHz width),
   channel occupancy, strongest networks. Widgets can be hidden per browser
-- **Networks**: sortable/filterable table, search, pagination, CSV/JSON export
+- **Networks**: sortable/filterable table with vendor names, search, pagination, CSV/JSON export
 - **Channels**: APs per channel, signal range, overlap, *estimated* congestion and a recommended channel
   (1/6/11)
 - **History**: live view (last 60 scans) and stored history (5-minute buckets, up to 7 days), channel
@@ -150,6 +151,19 @@ The MQTT page has a step-by-step guide, an example automation and ready-made das
 
 ---
 
+## Vendor names
+
+The device names the maker of each access point from the first 3 bytes of its MAC address (OUI). The full
+IEEE registry has ~37,000 entries and does not fit on the device, so `tools/build_oui.py` builds
+`data/oui.bin` (about 50 KB) with only networking and home-equipment vendors (TP-Link, Huawei, MikroTik,
+Ubiquiti, AVM, ...). Access points with a *locally administered* MAC (guest, mesh or randomized BSSIDs) are
+shown as *Private*, because such an address carries no vendor.
+
+```sh
+python tools/build_oui.py            # download the IEEE registry and rebuild data/oui.bin
+python tools/update_web.py --http <device-ip>   # upload it (with the other web files)
+```
+
 ## Updating
 
 | What | How |
@@ -221,7 +235,7 @@ src/platform.*  the only place with ESP8266 / ESP32 differences
 include/        config.h (board definitions, limits, defaults)
 partitions_esp32c3.csv  ESP32-C3 flash layout (two OTA slots + LittleFS)
 data/           web interface (index.html, embed.html, css/, js/)
-tools/          update_web.py (web update without data loss), build_info.py (build timestamp)
+tools/          update_web.py (web update without data loss), build_oui.py (vendor table), build_info.py
 docs/images/    README screenshots (invented demo data)
 ```
 
@@ -236,6 +250,7 @@ docs/images/    README screenshots (invented demo data)
 - [x] Phase 5: OTA, captive portal, advanced settings (web login intentionally left out: LAN-only device)
 - [x] ESP32-C3 version with BLE: BTHome, BLE scan with signal charts, GATT (same web UI and MQTT structure)
 - [x] Channel width (20/40 MHz) from the ESP32 scan, used in charts and congestion estimates
+- [x] Vendor names for access points (IEEE OUI, networking vendors)
 
 ---
 

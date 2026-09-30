@@ -16,6 +16,7 @@
 #include "platform.h"
 #include "statistics.h"
 #include "mqtt_manager.h"
+#include "oui.h"
 #include "storage.h"
 #include "system.h"
 #include "wifi_manager.h"
@@ -146,6 +147,7 @@ void streamPage(const char* path) {
         server.send(500, F("text/plain"), F("Web UI files missing. Run: python tools/update_web.py"));
         return;
     }
+    server.sendHeader(F("Cache-Control"), F("no-cache"));
     server.streamFile(f, F("text/html"));
     f.close();
 }
@@ -203,6 +205,8 @@ void handleStatus() {
     sys["reset_reason"] = Platform::resetReason();
     sys["fs_total"] = Platform::fsTotal();
     sys["fs_used"] = Platform::fsUsed();
+    sys["oui_prefixes"] = Oui::entryCount();
+    sys["oui_vendors"] = Oui::vendorCount();
 
     JsonObject wifi = d["wifi"].to<JsonObject>();
     bool connected = WifiManager::staConnected();
@@ -350,6 +354,15 @@ void handleNetworks() {
                Scanner::isNew(r) ? "true" : "false");
         w.addf(PSTR("\"first_seen_ago\":%lu,\"last_seen_ago\":%lu,"), (unsigned long)(now - r.firstSeen),
                (unsigned long)(now - r.lastSeen));
+        if (r.vendor == Oui::kLocal) {
+            w.add("\"vendor\":null,\"vendor_local\":true,");
+        } else {
+            String v = Oui::name(r.vendor);
+            w.buf() += F("\"vendor\":");
+            if (v.length()) appendJsonString(w.buf(), v.c_str());
+            else w.buf() += F("null");
+            w.add(",\"vendor_local\":false,");
+        }
         if (r.width) {
             w.addf(PSTR("\"width\":%u,\"secondary\":%d,"), r.width, r.secondary);
         } else {
@@ -1044,7 +1057,7 @@ bool isWebName(const String& s, const char* ext) {
 }
 
 bool isWebPath(const String& p) {
-    if (p == F("/index.html") || p == F("/embed.html") || p == F("/favicon.ico")) return true;
+    if (p == F("/index.html") || p == F("/embed.html") || p == F("/favicon.ico") || p == F("/oui.bin")) return true;
     if (p.startsWith(F("/css/"))) return isWebName(p.substring(5), ".css");
     if (p.startsWith(F("/js/"))) return isWebName(p.substring(4), ".js");
     return false;
@@ -1080,9 +1093,13 @@ void handleWebFileUpload() {
             if (isWebPath(s_webPath)) LittleFS.remove(tmp);
             return;
         }
+        // The vendor table is kept open for lookups; it must be closed to be replaced.
+        bool isOui = s_webPath == F("/oui.bin");
+        if (isOui) Oui::end();
         LittleFS.remove(s_webPath);
         if (!LittleFS.rename(tmp, s_webPath)) s_webError = F("Rename failed");
         else LOGF("OTA: web file %s updated (%u bytes)", s_webPath.c_str(), (unsigned)s_webBytes);
+        if (isOui) Oui::begin();  // new APs use the new table right away
     }
 }
 
@@ -1121,8 +1138,10 @@ void begin() {
     for (const char* p : kPages) server.on(p, HTTP_GET, handleIndex);
     server.on(F("/embed"), HTTP_GET, handleEmbed);
     for (const char* p : kCaptiveProbes) server.on(p, HTTP_GET, redirectToSetup);
-    server.serveStatic("/css", LittleFS, "/css", "max-age=300");
-    server.serveStatic("/js", LittleFS, "/js", "max-age=300");
+    // no-cache: browsers revalidate on every load, so web updates show up at once
+    // (no hard reload needed); on a LAN the ~150 KB per page load does not matter.
+    server.serveStatic("/css", LittleFS, "/css", "no-cache");
+    server.serveStatic("/js", LittleFS, "/js", "no-cache");
     server.on(F("/favicon.ico"), HTTP_GET, [] { server.send(204); });
 
     server.on(F("/api/status"), HTTP_GET, handleStatus);

@@ -388,6 +388,15 @@ function renderChannelBars() {
   }
 }
 
+// Vendor from the MAC prefix (IEEE OUI, networking vendors only)
+function vendorCell(n) {
+  if (n.vendor) return el('td', null, n.vendor);
+  if (n.vendor_local) {
+    return el('td', { class: 'muted', title: 'Locally administered MAC (guest, mesh or randomized BSSID): it carries no vendor' }, 'Private');
+  }
+  return el('td', { class: 'muted' }, '—');
+}
+
 // 20 / 40 MHz from the scan (ESP32); the ESP8266 scan cannot report it
 function fmtWidth(n) {
   if (!n.width) return 'Unknown';
@@ -443,9 +452,9 @@ function filteredNetworks() {
     .filter((n) => !chan || n.channel === Number(chan))
     .filter((n) => !strongOnly || n.rssi >= strongRssi)
     .filter((n) => !newOnly || n.new)
-    .filter((n) => !q || [n.ssid, n.bssid, n.security].some((v) => v.toLowerCase().includes(q)))
+    .filter((n) => !q || [n.ssid, n.bssid, n.security, n.vendor || ''].some((v) => v.toLowerCase().includes(q)))
     .sort((a, b) => {
-      const x = a[key], y = b[key];
+      const x = a[key] ?? (key === 'vendor' ? '' : 0), y = b[key] ?? (key === 'vendor' ? '' : 0);
       const c = typeof x === 'string' ? x.localeCompare(y) : x - y;
       return c * dir;
     });
@@ -485,6 +494,7 @@ function renderNetworks() {
       el('td', { class: 'num' }, n.rssi_avg),
       qualityCell(n.rssi),
       securityCell(n.security),
+      vendorCell(n),
       el('td', { class: 'num' }, n.seen),
       el('td', { class: 'num' }, fmtAgo(n.first_seen_ago)),
       el('td', { class: 'num' }, fmtAgo(n.last_seen_ago)));
@@ -1081,7 +1091,7 @@ $('#fw-upload').addEventListener('click', () => {
   xhr.send(fd);
 });
 
-const WEB_PATH = /^\/(index\.html|embed\.html|favicon\.ico|css\/[\w.-]+\.css|js\/[\w.-]+\.js)$/;
+const WEB_PATH = /^\/(index\.html|embed\.html|favicon\.ico|oui\.bin|css\/[\w.-]+\.css|js\/[\w.-]+\.js)$/;
 
 $('#web-dir').addEventListener('change', (e) => {
   // "data/js/app.js" -> "/js/app.js"; everything else in the folder is ignored
@@ -1118,7 +1128,7 @@ $('#web-upload').addEventListener('click', async () => {
     m.replaceChildren(`All ${done} files uploaded. `);
     const b = el('button', { type: 'button' }, 'Reload page');
     b.addEventListener('click', () => location.reload());
-    m.append(b, ' (the browser may still show cached files; use Ctrl+Shift+R if so)');
+    m.append(b);
   } catch (err) {
     m.className = 'small msg-err';
     m.textContent = `Stopped after ${done} of ${upd.web.length} files: ${err.message}`;
@@ -1588,6 +1598,7 @@ function renderSystem() {
     ['Sketch', `${fmtBytes(s.sketch_size)} used, ${fmtBytes(s.free_sketch)} free`,
       usage(s.sketch_size / (s.sketch_size + s.free_sketch))],
     ['LittleFS', `${fmtBytes(s.fs_used)} / ${fmtBytes(s.fs_total)}`, usage(s.fs_used / s.fs_total)],
+    ['Vendor database', s.oui_prefixes ? `${s.oui_prefixes} MAC prefixes, ${s.oui_vendors} vendors (IEEE)` : 'not installed (upload data/oui.bin)'],
     ['Free heap', `${fmtBytes(s.free_heap)} (max block ${fmtBytes(s.max_free_block)}, frag ${s.heap_fragmentation}%)`,
       s.ram_total ? usage((s.ram_total - s.free_heap) / s.ram_total, 'RAM used') : null],
     ['Core / SDK', `${s.core} / ${s.sdk}`],

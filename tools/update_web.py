@@ -53,7 +53,7 @@ def update_http(host):
         if r.status_code != 200:
             sys.exit(f"{path}: {r.status_code} {r.text}")
         print(f"{path}: {r.json()['bytes']} bytes")
-    print("Web files updated (device keeps running). Reload the page with Ctrl+Shift+R.")
+    print("Web files updated (device keeps running). Reload the page in the browser.")
 
 
 def update_serial(port):

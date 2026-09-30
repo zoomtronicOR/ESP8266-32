@@ -6,6 +6,7 @@
 #include "console.h"
 #include "history.h"
 #include "mqtt_manager.h"
+#include "oui.h"
 #include "storage.h"
 #include "system.h"
 #include "web_server.h"
@@ -20,6 +21,7 @@ void setup() {
     System::begin();
     Storage::begin();
     Storage::loadConfig();
+    Oui::begin();
     WifiManager::begin();
     Alerts::begin();
     Scanner::begin(config.maxAps);

@@ -119,7 +119,7 @@
   <section id="page-networks" class="page" hidden>
     <div class="card">
       <div class="toolbar">
-        <input type="search" id="f-search" placeholder="Search SSID, BSSID, security…">
+        <input type="search" id="f-search" placeholder="Search SSID, BSSID, security, vendor…">
         <select id="f-channel"><option value="">All channels</option></select>
         <label><input type="checkbox" id="f-strong"> Strong only</label>
         <label><input type="checkbox" id="f-new"> New only</label>
@@ -142,6 +142,7 @@
             <th data-sort="rssi_avg" class="num">Avg</th>
             <th>Quality</th>
             <th data-sort="security">Security</th>
+            <th data-sort="vendor">Vendor</th>
             <th data-sort="seen" class="num">Seen</th>
             <th data-sort="first_seen_ago" class="num">First seen</th>
             <th data-sort="last_seen_ago" class="num">Last seen</th>
@@ -571,7 +572,7 @@
       <h3>Web interface files</h3>
       <ol>
         <li>Choose the <code>data</code> folder of the project and press <b>Upload files</b>.</li>
-        <li>When it is done, reload the page with <b>Ctrl+Shift+R</b> so the browser drops its cached copies.</li>
+        <li>When it is done, reload the page to use the new files.</li>
       </ol>
       <p>If a release changes both, update the firmware first, then the web files.</p>
       <h3>If something goes wrong</h3>
