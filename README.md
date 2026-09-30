@@ -220,7 +220,6 @@ include/        config.h (board definitions, limits, defaults)
 partitions_esp32c3.csv  ESP32-C3 flash layout (two OTA slots + LittleFS)
 data/           web interface (index.html, embed.html, css/, js/)
 tools/          update_web.py (web update without data loss), build_info.py (build timestamp)
-docs/SPEC.md    full requirements (Serbian); items impossible on ESP8266 are commented out
 docs/images/    README screenshots (invented demo data)
 ```
 

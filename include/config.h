@@ -123,7 +123,7 @@
 
 // ---- Not available on ESP8266 hardware (kept for the future BLE-capable board) --
 // ESP8266 has no Bluetooth radio and only a 2.4 GHz WiFi radio. These options are
-// intentionally disabled; see docs/SPEC.md §2 and the planned ESP32 variant.
+// intentionally disabled there; boards with a BLE radio set FEATURE_BLE_NATIVE in the board block.
 // FEATURE_BLE_NATIVE: set in the board block above for boards with a BLE radio
 // #define FEATURE_WIFI_5GHZ       1   // 5 GHz scanning (ESP32-C5 / dedicated radio)
 // #define FEATURE_WIFI_6GHZ       1   // 6 GHz / WiFi 6E scanning

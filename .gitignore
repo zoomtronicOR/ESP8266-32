@@ -3,3 +3,4 @@
 include/build_info.h
 # local notes for Claude Code, not published
 CLAUDE.md
+docs/SPEC.md

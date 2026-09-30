@@ -49,7 +49,7 @@ function fmtDuration(s) {
 const fmtAgo = (s) => (s < 5 ? 'now' : fmtDuration(s) + ' ago');
 const fmtBytes = (b) => (b >= 1048576 ? (b / 1048576).toFixed(2) + ' MB' : b >= 1024 ? (b / 1024).toFixed(1) + ' KB' : b + ' B');
 
-// RSSI classes (docs/SPEC.md §7, §22)
+// RSSI quality classes
 const QUALITY = [
   [-40, 'Excellent', 100, 'var(--ok)'],
   [-55, 'Very Good', 80, 'var(--ok)'],
