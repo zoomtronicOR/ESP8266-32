@@ -10,6 +10,26 @@ cloud, PC, Raspberry Pi or Docker.
 The project is designed to move to **ESP32** later (with BLE) without changing the web UI or the MQTT
 structure. The product name is therefore board-neutral.
 
+![Dashboard](docs/images/dashboard.png)
+
+---
+
+## Screenshots
+
+> The screenshots use invented networks and MAC addresses; no real neighbourhood data is shown.
+
+| Channels | History |
+|---|---|
+| ![Channel analysis](docs/images/channels.png) | ![History and heatmap](docs/images/history.png) |
+
+| Alerts | MQTT / Home Assistant |
+|---|---|
+| ![Alerts](docs/images/alerts.png) | ![MQTT and Home Assistant setup](docs/images/mqtt.png) |
+
+| System |
+|---|
+| ![System information](docs/images/system.png) |
+
 ---
 
 ## Features
@@ -191,6 +211,7 @@ include/        config.h (limits, defaults, board definitions)
 data/           web interface (index.html, embed.html, css/, js/)
 tools/          update_web.py (web update without data loss), build_info.py (build timestamp)
 docs/SPEC.md    full requirements (Serbian); items impossible on ESP8266 are commented out
+docs/images/    README screenshots (invented demo data)
 CLAUDE.md       architecture and developer notes
 ```
 
@@ -209,4 +230,4 @@ CLAUDE.md       architecture and developer notes
 
 ## License
 
-No license has been chosen yet. All rights reserved by the author until one is added.
+[MIT](LICENSE) © 2026 Zoomtronic
