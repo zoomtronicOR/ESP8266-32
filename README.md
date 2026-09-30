@@ -68,7 +68,8 @@ platform layer.
 **Bluetooth LE** (ESP32-C3)
 - **BTHome** advertising: Home Assistant discovers the device over Bluetooth by itself (WiFi APs, BLE devices
   nearby, recommended channel), no pairing or MQTT needed
-- Passive scan of nearby BLE devices (address, name, maker, RSSI) on its own **BLE** page
+- Passive scan of nearby BLE devices (address, name, maker, RSSI) on its own **BLE** page, with a signal
+  bar chart of the devices in range and a signal-over-time chart
 - GATT service with a JSON summary, readable with any BLE app (e.g. nRF Connect)
 
 **System**
@@ -233,7 +234,7 @@ docs/images/    README screenshots (invented demo data)
 - [x] Phase 3: MQTT, MQTT discovery, Home Assistant
 - [x] Phase 4: alerts, new AP detection, channel analysis, heatmap
 - [x] Phase 5: OTA, captive portal, advanced settings (web login intentionally left out: LAN-only device)
-- [x] ESP32-C3 version with BLE: BTHome, BLE scan, GATT (same web UI and MQTT structure)
+- [x] ESP32-C3 version with BLE: BTHome, BLE scan with signal charts, GATT (same web UI and MQTT structure)
 - [x] Channel width (20/40 MHz) from the ESP32 scan, used in charts and congestion estimates
 
 ---
