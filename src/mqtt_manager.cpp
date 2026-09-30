@@ -379,7 +379,7 @@ void publishScan() {
     s += Stats::recommendedChannel(cs);
     s += F(",\"least_populated\":");
     s += Stats::leastPopulatedChannel(cs);
-    s += F("],\"avg_rssi\":[");
+    s += F(",\"avg_rssi\":[");
     for (int c = 0; c < 13; c++) {
         if (c) s += ',';
         s += aps[c] ? String((int)lroundf((float)rsum[c] / aps[c])) : String(F("null"));
