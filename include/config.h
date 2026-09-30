@@ -101,6 +101,7 @@
 #define BLE_SCAN_DURATION_MS      5000
 #define BLE_ADV_REFRESH_MS        30000   // BTHome values / GATT summary refresh
 #define BLE_MAX_DEVICES           60      // recently seen BLE devices kept for the web page
+#define BLE_HISTORY_POINTS        60      // last BLE scans kept for the signal-over-time chart
 
 // ---- Channel analysis (estimated, not RF measurement) ------------------------------
 #define CONGESTION_SCANS          10      // averaged over up to this many recent scans

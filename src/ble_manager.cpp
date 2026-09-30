@@ -30,6 +30,10 @@ uint16_t s_lastScanDevices = 0;
 int8_t s_lastScanStrongest = INT8_MIN;
 uint32_t s_lastScanUptime = 0;
 
+Ble::ScanPoint s_hist[BLE_HISTORY_POINTS];
+uint16_t s_histCount = 0;
+uint16_t s_histNext = 0;
+
 Ble::Device s_devices[BLE_MAX_DEVICES];
 uint16_t s_count = 0;
 
@@ -110,6 +114,7 @@ void finishScan() {
     uint32_t now = System::uptimeSeconds();
     s_lastScanDevices = 0;
     s_lastScanStrongest = INT8_MIN;
+    int32_t rssiSum = 0;
     for (int i = 0; i < res.getCount(); i++) {
         const NimBLEAdvertisedDevice* d = res.getDevice(i);
         if (!d) continue;
@@ -129,9 +134,17 @@ void finishScan() {
         if (dev->seen < UINT16_MAX) dev->seen++;
         s_lastScanDevices++;
         if (dev->rssi > s_lastScanStrongest) s_lastScanStrongest = dev->rssi;
+        rssiSum += dev->rssi;
     }
     scan->clearResults();
     s_lastScanUptime = now;
+    Ble::ScanPoint& p = s_hist[s_histNext];
+    p.uptime = now;
+    p.devices = (uint8_t)min<uint16_t>(s_lastScanDevices, 255);
+    p.strongest = s_lastScanStrongest;
+    p.average = s_lastScanDevices ? (int8_t)lroundf((float)rssiSum / s_lastScanDevices) : INT8_MIN;
+    s_histNext = (s_histNext + 1) % BLE_HISTORY_POINTS;
+    if (s_histCount < BLE_HISTORY_POINTS) s_histCount++;
     s_scanning = false;
     LOGF("BLE scan #%lu: %u devices", (unsigned long)s_scanId, s_lastScanDevices);
     updateAdvertising();
@@ -206,6 +219,10 @@ uint32_t scanId() { return s_scanId; }
 uint16_t lastScanDevices() { return s_lastScanDevices; }
 int8_t lastScanStrongest() { return s_lastScanStrongest; }
 uint32_t lastScanUptime() { return s_lastScanUptime; }
+uint16_t historyCount() { return s_histCount; }
+const ScanPoint& historyAt(uint16_t i) {
+    return s_hist[(s_histNext + BLE_HISTORY_POINTS - s_histCount + i) % BLE_HISTORY_POINTS];
+}
 
 #else  // no BLE radio on this board -----------------------------------------------------
 
@@ -229,6 +246,11 @@ uint32_t scanId() { return 0; }
 uint16_t lastScanDevices() { return 0; }
 int8_t lastScanStrongest() { return INT8_MIN; }
 uint32_t lastScanUptime() { return 0; }
+uint16_t historyCount() { return 0; }
+const ScanPoint& historyAt(uint16_t) {
+    static ScanPoint none = {};
+    return none;
+}
 
 #endif
 

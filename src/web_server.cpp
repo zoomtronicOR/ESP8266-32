@@ -420,6 +420,13 @@ void handleBle() {
         w.add("}");
         first = false;
     }
+    w.add("],\"history\":[");
+    for (uint16_t i = 0; i < Ble::historyCount(); i++) {
+        const Ble::ScanPoint& p = Ble::historyAt(i);
+        char a[8], b[8];
+        w.addf(PSTR("%s[%lu,%u,%s,%s]"), i ? "," : "", (unsigned long)(now - p.uptime), p.devices,
+               rssiJson(p.strongest, a), rssiJson(p.average, b));
+    }
     w.add("]}");
     w.end();
 }

@@ -38,4 +38,14 @@ int8_t lastScanStrongest();      // RSSI_NONE-style INT8_MIN when none
 uint32_t lastScanUptime();
 const char* companyName(uint16_t id);
 
+// Per-scan summary for the signal-over-time chart, oldest first
+struct ScanPoint {
+    uint32_t uptime;
+    uint8_t devices;
+    int8_t strongest;  // INT8_MIN when no device
+    int8_t average;    // INT8_MIN when no device
+};
+uint16_t historyCount();
+const ScanPoint& historyAt(uint16_t i);
+
 }  // namespace Ble

@@ -81,7 +81,7 @@ const state = {
   hist: { range: 'live', bssid: null, loadedKey: null, loadedAt: 0 },
   wifi: { selected: null, connecting: false, listKey: '' },
   alerts: { list: [], loadedId: -1, fetching: false },
-  ble: { scanId: -1, devices: [] },
+  ble: { scanId: -1, devices: [], history: [] },
   chan: { scanId: -1, data: null },
 };
 
@@ -91,6 +91,7 @@ const charts = {
   range: new Charts.Range($('#chan-range').parentElement),
   histCount: new Charts.Line($('#hist-count').parentElement, { integer: false, legend: $('#hist-count-legend'), yMin: 0 }),
   histRssi: new Charts.Line($('#hist-rssi').parentElement, { yLabel: 'dBm', integer: true, unit: ' dBm', legend: $('#hist-rssi-legend') }),
+  bleHist: new Charts.Line($('#ble-hist').parentElement, { yLabel: 'dBm', integer: true, unit: ' dBm', legend: $('#ble-hist-legend'), empty: 'Waiting for BLE scans' }),
   heat: new Charts.Heatmap($('#heatmap').parentElement, $('#heat-legend')),
   histAp: new Charts.Line($('#hist-ap-chart').parentElement, { yLabel: 'dBm', integer: true, unit: ' dBm', empty: 'No data for this access point in the selected range' }),
 };
@@ -1182,7 +1183,13 @@ function renderBle() {
   $('#ble-kv').replaceChildren(...kv.flatMap(([k, v]) => [el('dt', null, k), el('dd', null, v)]));
   if (b.scan_id !== state.ble.scanId) {
     state.ble.scanId = b.scan_id;
-    apiGet('/api/ble').then((r) => { state.ble.devices = r.devices; renderBleTable(); }).catch(() => { state.ble.scanId = -1; });
+    apiGet('/api/ble').then((r) => {
+      state.ble.devices = r.devices;
+      state.ble.history = r.history || [];
+      state.ble.fetchedAt = Date.now();
+      renderBleTable();
+      renderBleCharts();
+    }).catch(() => { state.ble.scanId = -1; });
   } else {
     renderBleTable();
   }
@@ -1202,6 +1209,34 @@ function renderBleTable() {
   if (!rows.length) $('#ble-table tbody').append(el('tr', null, el('td', { class: 'muted' }, 'No BLE devices yet.')));
 }
 $('#ble-present').addEventListener('input', renderBleTable);
+
+// Label for a BLE device: its name, else the maker, else the address
+const bleLabel = (d) => d.name || (d.company ? `${d.company} device` : d.address);
+
+function renderBleCharts() {
+  // Bars: devices from the latest scan, strongest first (-100 dBm empty .. -30 dBm full)
+  const rows = state.ble.devices.filter((d) => d.present).sort((a, b) => b.rssi - a.rssi).slice(0, 25);
+  const pct = (rssi) => Math.max(2, Math.min(100, ((rssi + 100) / 70) * 100));
+  const bars = $('#ble-bars');
+  bars.replaceChildren(...rows.flatMap((d) => [
+    el('div', { class: 'rssi-label', title: `${d.address}${d.random ? ' (random address)' : ''}` }, bleLabel(d)),
+    el('div', { class: 'rssi-track' }, el('div', { class: 'rssi-fill', style: `width:${pct(d.rssi)}%` })),
+    el('div', { class: 'rssi-val' }, `${d.rssi} dBm`),
+  ]));
+  if (!rows.length) bars.append(el('div', { class: 'muted' }, 'No BLE devices in the latest scan.'));
+
+  // Line: strongest and average RSSI per BLE scan
+  const t0 = state.ble.fetchedAt || Date.now();
+  const h = state.ble.history;
+  charts.bleHist.setData([
+    { name: 'Strongest device', slot: 0, points: h.map((p) => [t0 - p[0] * 1000, p[2]]) },
+    { name: 'Average of devices', slot: 1, points: h.map((p) => [t0 - p[0] * 1000, p[3]]) },
+  ]);
+  const counts = h.map((p) => p[1]);
+  $('#ble-hist-info').textContent = h.length
+    ? `last ${h.length} BLE scans · ${Math.min(...counts)}–${Math.max(...counts)} devices per scan`
+    : '';
+}
 
 async function loadBleSettings() {
   try {

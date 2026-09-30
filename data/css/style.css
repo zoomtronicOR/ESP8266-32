@@ -215,6 +215,14 @@ input[type=color] { height: 34px; padding: 2px 4px !important; width: 80px !impo
 .w-checks label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .w-hidden { display: none !important; }
 
+/* BLE signal bars: -100 dBm = empty, -30 dBm = full */
+.rssi-bars { display: grid; grid-template-columns: minmax(120px, 220px) 1fr 70px; gap: 6px 10px; align-items: center; }
+.rssi-label { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rssi-track { height: 14px; background: var(--row-hover); border-radius: 4px; overflow: hidden; }
+.rssi-fill { height: 100%; border-radius: 4px; background: var(--s1); transition: width .3s; }
+.rssi-val { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) { .rssi-bars { grid-template-columns: 110px 1fr 60px; } }
+
 /* alerts */
 .badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--bad);
   color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 600; }

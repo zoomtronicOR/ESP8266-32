@@ -307,6 +307,21 @@
       <dl class="kv" id="ble-kv"></dl>
     </div>
     <div class="card">
+      <div class="card-head">
+        <h2>Signal strength of nearby devices</h2>
+        <span class="muted small">latest scan, strongest first</span>
+      </div>
+      <div class="rssi-bars" id="ble-bars"></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>BLE signal over time</h2>
+        <span class="muted small" id="ble-hist-info"></span>
+      </div>
+      <div class="legend" id="ble-hist-legend"></div>
+      <div class="chart-box"><canvas class="chart" id="ble-hist"></canvas><div class="chart-tip" hidden></div></div>
+    </div>
+    <div class="card">
       <div class="toolbar">
         <h2 style="margin:0">Nearby BLE devices</h2>
         <span class="spacer"></span>
