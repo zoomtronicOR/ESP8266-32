@@ -38,6 +38,12 @@ struct DeviceConfig {
     uint8_t scanChannel;          // 0 = all channels, 1..13 = only this one
     String uiTheme;               // default theme for browsers without their own choice: auto|light|dark
     String uiAccent;              // #rrggbb
+
+    bool bleEnabled;              // only used on boards with a BLE radio
+    String bleName;               // advertised name, 1-20 chars
+    bool bleBthome;               // BTHome v2 advertising for Home Assistant
+    bool bleScan;                 // periodic passive scan of nearby BLE devices
+    uint16_t bleScanInterval;     // s
 };
 
 extern DeviceConfig config;

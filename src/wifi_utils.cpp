@@ -1,6 +1,6 @@
 #include "wifi_utils.h"
 
-#include <ESP8266WiFi.h>
+#include "platform.h"
 
 uint16_t channelToFrequency(uint8_t channel) {
     if (channel >= 1 && channel <= 13) return 2407 + 5 * channel;
@@ -8,16 +8,7 @@ uint16_t channelToFrequency(uint8_t channel) {
     return 0;
 }
 
-const char* securityName(uint8_t encType) {
-    switch (encType) {
-        case ENC_TYPE_NONE: return "Open";
-        case ENC_TYPE_WEP:  return "WEP";
-        case ENC_TYPE_TKIP: return "WPA";
-        case ENC_TYPE_CCMP: return "WPA2";
-        case ENC_TYPE_AUTO: return "WPA/WPA2";
-        default:            return "Unknown";
-    }
-}
+const char* securityName(uint8_t encType) { return Platform::securityName(encType); }
 
 void formatBssid(const uint8_t* b, char* out) {
     snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X", b[0], b[1], b[2], b[3], b[4], b[5]);

@@ -1,8 +1,12 @@
 #pragma once
 #include <Arduino.h>
 
+#if defined(ESP8266)
 #define LOGF(fmt, ...) \
     Serial.printf_P(PSTR("[%7lu] " fmt "\n"), (unsigned long)(millis() / 1000), ##__VA_ARGS__)
+#else
+#define LOGF(fmt, ...) Serial.printf("[%7lu] " fmt "\n", (unsigned long)(millis() / 1000), ##__VA_ARGS__)
+#endif
 
 namespace System {
 

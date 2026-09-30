@@ -1,12 +1,12 @@
 #include "history.h"
 
-#include <ESP8266WiFi.h>
 #include <LittleFS.h>
 #include <time.h>
 
 #include <vector>
 
 #include "config.h"
+#include "platform.h"
 #include "storage.h"
 #include "system.h"
 #include "wifi_scanner.h"
@@ -55,7 +55,7 @@ HistorySummary snapshot() {
         const ApRecord& r = recs[i];
         if (!Scanner::isPresent(r)) continue;
         if (h.aps < 255) h.aps++;
-        if (r.enc == ENC_TYPE_NONE && h.open < 255) h.open++;
+        if (Platform::encIsOpen(r.enc) && h.open < 255) h.open++;
         if (r.hidden && h.hidden < 255) h.hidden++;
         if (r.rssi > h.strongest) h.strongest = r.rssi;
         sum += r.rssi;
@@ -137,11 +137,7 @@ uint32_t fileDay(const String& name) {
     return strtoul(name.c_str() + 1, nullptr, 10);
 }
 
-size_t fsFree() {
-    FSInfo info;
-    LittleFS.info(info);
-    return info.totalBytes - info.usedBytes;
-}
+size_t fsFree() { return Platform::fsTotal() - Platform::fsUsed(); }
 
 }  // namespace
 
@@ -249,14 +245,9 @@ void forEachApPoint(const uint8_t* bssid, uint32_t fromEpoch,
     }
 }
 
-// Collects history file names first: removing entries while a Dir is being
-// iterated is not safe on LittleFS.
-std::vector<String> listFiles() {
-    std::vector<String> names;
-    Dir dir = LittleFS.openDir(HISTORY_DIR);
-    while (dir.next()) names.push_back(dir.fileName());
-    return names;
-}
+// Collects history file names first: removing entries while a directory is
+// being iterated is not safe on LittleFS.
+std::vector<String> listFiles() { return Platform::listDir(HISTORY_DIR); }
 
 void prune() {
     if (!persistent()) return;

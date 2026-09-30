@@ -1,11 +1,12 @@
 #include "mqtt_manager.h"
 
 #include <ArduinoJson.h>
-#include <ESP8266WiFi.h>
 #include <PubSubClient.h>
 
 #include "alerts.h"
+#include "ble_manager.h"
 #include "config.h"
+#include "platform.h"
 #include "storage.h"
 #include "system.h"
 #include "statistics.h"
@@ -30,8 +31,9 @@ bool s_discoveryPending = false;
 bool s_wasConnected = false;
 uint32_t s_lastAlertPublished = 0;
 int8_t s_alertState = -1;  // last published "alert" binary state, -1 = unknown
+uint32_t s_lastBlePublished = 0;
 
-String nodeId() { return String(F("wifimon_")) + String(ESP.getChipId(), HEX); }
+String nodeId() { return String(F("wifimon_")) + String(Platform::chipId(), HEX); }
 
 String timestampJson() {
     char iso[24];
@@ -56,7 +58,7 @@ bool pubValue(const char* suffix, const String& valueJson) {
 // "AP-XXXX": stable per BSSID and device, not reversible to the MAC.
 String anonBssid(const uint8_t* bssid) {
     uint32_t h = 2166136261u;
-    uint32_t salt = ESP.getChipId();
+    uint32_t salt = Platform::chipId();
     for (int i = 0; i < 4; i++) h = (h ^ ((salt >> (8 * i)) & 0xff)) * 16777619u;
     for (int i = 0; i < 6; i++) h = (h ^ bssid[i]) * 16777619u;
     char out[8];
@@ -193,6 +195,16 @@ void publishDiscovery() {
         ok += publishDiscoveryDoc("event", "alert", doc);
     }
     for (const char* id : kRetiredEvents) pub(discoveryTopic("event", id), "", true);
+    if (Ble::available()) {
+        JsonDocument doc;
+        doc["name"] = "BLE devices nearby";
+        doc["state_topic"] = s_base + F("/ble");
+        doc["value_template"] = "{{ value_json.devices }}";
+        doc["state_class"] = "measurement";
+        doc["icon"] = "mdi:bluetooth";
+        total++;
+        ok += publishDiscoveryDoc("sensor", "ble_devices", doc);
+    }
     LOGF("MQTT: discovery published (%u/%u entities)", ok, total);
 }
 
@@ -450,6 +462,7 @@ bool connect() {
     s_lastScanPublished = 0;  // republish the latest scan right away
     s_lastStateMs = 0;
     s_alertState = -1;
+    s_lastBlePublished = 0;
     return true;
 }
 
@@ -506,6 +519,13 @@ void loop() {
     if (s_discoveryPending) publishDiscovery();
     if (Scanner::scanId() > 0 && Scanner::scanId() != s_lastScanPublished) publishScan();
     publishAlerts();
+    if (Ble::scanId() != s_lastBlePublished) {
+        s_lastBlePublished = Ble::scanId();
+        String s = String(F("{\"devices\":")) + Ble::lastScanDevices() + F(",\"strongest\":") +
+                   (Ble::lastScanDevices() ? String(Ble::lastScanStrongest()) : String(F("null"))) +
+                   F(",\"timestamp\":") + timestampJson() + '}';
+        pub(s_base + F("/ble"), s);
+    }
     if (s_lastStateMs == 0 || millis() - s_lastStateMs >= MQTT_STATE_INTERVAL_MS) publishState();
 }
 
@@ -518,6 +538,7 @@ void forgetDevice() {
     for (const char* id : kRetiredEvents) pub(discoveryTopic("event", id), "", true);
     pub(s_base + F("/new_ap"), "", true);
     pub(s_base + F("/alert"), "", true);
+    if (Ble::available()) pub(discoveryTopic("sensor", "ble_devices"), "", true);
     pub(s_base + F("/availability"), "", true);
     s_mqtt.disconnect();  // clean disconnect: the broker does not publish the will
     LOGF("MQTT: device removed from Home Assistant");

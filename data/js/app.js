@@ -81,6 +81,7 @@ const state = {
   hist: { range: 'live', bssid: null, loadedKey: null, loadedAt: 0 },
   wifi: { selected: null, connecting: false, listKey: '' },
   alerts: { list: [], loadedId: -1, fetching: false },
+  ble: { scanId: -1, devices: [] },
   chan: { scanId: -1, data: null },
 };
 
@@ -98,7 +99,7 @@ const charts = {
 
 const ROUTES = {
   '/': 'dashboard', '/networks': 'networks', '/channels': 'channels', '/history': 'history', '/alerts': 'alerts',
-  '/wifi': 'wifi', '/mqtt': 'mqtt', '/update': 'update', '/settings': 'settings', '/system': 'system',
+  '/wifi': 'wifi', '/ble': 'ble', '/mqtt': 'mqtt', '/update': 'update', '/settings': 'settings', '/system': 'system',
 };
 
 function showPage(page, push, query) {
@@ -112,6 +113,7 @@ function showPage(page, push, query) {
   if (page === 'settings') loadConfig();
   if (page === 'mqtt') loadMqtt();
   if (page === 'alerts') loadAlertSettings();
+  if (page === 'ble') { loadBleSettings(); state.ble.scanId = -1; }
   if (page === 'history') {
     const b = new URLSearchParams(location.search).get('bssid');
     if (b) state.hist.bssid = b;
@@ -257,12 +259,17 @@ function render() {
     case 'wifi': renderWifi(); break;
     case 'mqtt': renderMqtt(); break;
     case 'update': renderUpdate(); break;
+    case 'ble': renderBle(); break;
     case 'system': renderSystem(); break;
   }
 }
 
 function renderHeader() {
   const st = state.status;
+  // BLE page and widget only on boards with a BLE radio
+  const bleOn = !!(st && st.ble && st.ble.available);
+  $('#nav-ble').hidden = !bleOn;
+  $('#w-ble-box').hidden = !bleOn;
   $('#hdr-dot').className = 'dot ' + (st ? 'ok' : 'bad');
   if (!st) return;
   const w = st.wifi;
@@ -291,6 +298,7 @@ function renderDashboard() {
     set('#w-rssi', st.wifi.connected ? st.wifi.rssi + ' dBm' : '—');
     set('#w-uptime', fmtDuration(st.uptime));
     set('#w-alerts', st.alerts.unread);
+    if (st.ble.available) set('#w-ble', st.ble.devices ?? '—');
 
     const sel = $('#dash-scan-interval');
     if (document.activeElement !== sel) {
@@ -1105,7 +1113,10 @@ $('#web-upload').addEventListener('click', async () => {
 
 function dashItems() {
   const items = [];
-  for (const w of $$('#page-dashboard .widgets .widget')) items.push({ el: w, name: $('.w-label', w).textContent });
+  for (const w of $$('#page-dashboard .widgets .widget')) {
+    if (w.id === 'w-ble-box' && w.hidden) continue;  // no BLE on this board
+    items.push({ el: w, name: $('.w-label', w).textContent });
+  }
   for (const c of $$('#page-dashboard > .card:not(.w-panel)')) items.push({ el: c, name: $('h2', c).textContent });
   return items;
 }
@@ -1136,6 +1147,82 @@ $('#w-custom').addEventListener('click', () => {
   }));
 });
 applyDashPrefs();
+
+// ---- BLE page ---------------------------------------------------------------------
+
+const bleForm = $('#ble-form');
+
+function renderBle() {
+  const st = state.status;
+  if (!st || !st.ble.available) return;
+  const b = st.ble;
+  const kv = [
+    ['State', b.enabled ? (b.advertising ? 'on, advertising' : 'on') : 'off'],
+    ['Name', b.name],
+    ['BLE address', b.address || '—'],
+    ['BTHome', b.bthome ? 'advertising (Home Assistant)' : 'off'],
+    ['Scan', b.scan ? (b.last_scan_ago == null ? 'waiting for the first scan' : `${b.devices} devices, ${fmtAgo(b.last_scan_ago)}`) : 'off'],
+  ];
+  $('#ble-kv').replaceChildren(...kv.flatMap(([k, v]) => [el('dt', null, k), el('dd', null, v)]));
+  if (b.scan_id !== state.ble.scanId) {
+    state.ble.scanId = b.scan_id;
+    apiGet('/api/ble').then((r) => { state.ble.devices = r.devices; renderBleTable(); }).catch(() => { state.ble.scanId = -1; });
+  } else {
+    renderBleTable();
+  }
+}
+
+function renderBleTable() {
+  const presentOnly = $('#ble-present').checked;
+  const rows = state.ble.devices.filter((d) => !presentOnly || d.present).sort((a, b) => b.rssi - a.rssi);
+  $('#ble-table tbody').replaceChildren(...rows.map((d) => el('tr', d.present ? null : { class: 'gone' },
+    el('td', { class: 'mono' }, d.address + (d.random ? ' *' : '')),
+    el('td', null, d.name || el('span', { class: 'hidden-ssid' }, '(no name)')),
+    el('td', null, d.company || '—'),
+    el('td', { class: 'num' }, d.rssi),
+    qualityCell(d.rssi),
+    el('td', { class: 'num' }, d.seen),
+    el('td', { class: 'num' }, fmtAgo(d.last_seen_ago)))));
+  if (!rows.length) $('#ble-table tbody').append(el('tr', null, el('td', { class: 'muted' }, 'No BLE devices yet.')));
+}
+$('#ble-present').addEventListener('input', renderBleTable);
+
+async function loadBleSettings() {
+  try {
+    const c = await apiGet('/api/config');
+    bleForm.ble_enabled.checked = c.ble_enabled;
+    bleForm.ble_name.value = c.ble_name;
+    bleForm.ble_bthome.checked = c.ble_bthome;
+    bleForm.ble_scan.checked = c.ble_scan;
+    bleForm.ble_scan_interval.value = c.ble_scan_interval;
+  } catch (err) {
+    $('#ble-msg').textContent = 'Could not load settings: ' + err.message;
+  }
+}
+
+bleForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const m = $('#ble-msg');
+  try {
+    const r = await apiPost('/api/config', {
+      ble_enabled: bleForm.ble_enabled.checked,
+      ble_name: bleForm.ble_name.value.trim(),
+      ble_bthome: bleForm.ble_bthome.checked,
+      ble_scan: bleForm.ble_scan.checked,
+      ble_scan_interval: Number(bleForm.ble_scan_interval.value),
+    });
+    m.className = 'small msg-ok';
+    m.replaceChildren(r.reboot_required ? 'Saved. Reboot to apply. ' : 'Saved.');
+    if (r.reboot_required) {
+      const btn = el('button', { type: 'button' }, 'Reboot now');
+      btn.addEventListener('click', reboot);
+      m.append(btn);
+    }
+  } catch (err) {
+    m.className = 'small msg-err';
+    m.textContent = err.message;
+  }
+});
 
 // ---- MQTT page -----------------------------------------------------------------
 
@@ -1472,7 +1559,9 @@ function renderSystem() {
       ? `stored in flash, ${st.history.bucket_s / 60} min resolution, retention ${RANGE_LABELS[st.history.hours] || st.history.hours + ' h'}`
       : 'RAM only (waiting for NTP time)'],
     ['MQTT', st.mqtt.enabled ? `${st.mqtt.state} (${st.mqtt.broker})` : 'disabled'],
-    ['BLE', 'not available on this board'],
+    ['BLE', st.ble.available
+      ? (st.ble.enabled ? `on · ${st.ble.address} · ${st.ble.devices} devices nearby` : 'off (enable on the BLE page)')
+      : 'not available on this board'],
     ['About', `Developed by Zoomtronic and a bit of Claude · firmware built and uploaded ${fmtStamp(st.build_time) || '—'}`],
   ];
   $('#sys-kv').replaceChildren(...rows.flatMap(([k, v, bar]) => [

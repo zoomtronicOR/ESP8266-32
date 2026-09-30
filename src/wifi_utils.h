@@ -4,8 +4,7 @@
 // 2.4 GHz channel centre frequency in MHz, 0 for an unknown channel.
 uint16_t channelToFrequency(uint8_t channel);
 
-// Human-readable security for an ESP8266 ENC_TYPE_* value.
-// The ESP8266 scan cannot distinguish WPA3; CCMP is reported as "WPA2".
+// Human-readable security for the core's encryption type (see Platform::securityName).
 const char* securityName(uint8_t encType);
 
 void formatBssid(const uint8_t* bssid, char* out /* >= 18 bytes */);

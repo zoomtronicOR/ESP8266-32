@@ -13,7 +13,7 @@ struct ApRecord {
     int8_t rssiMin;
     int8_t rssiMax;
     uint8_t channel;
-    uint8_t enc;       // ESP8266 ENC_TYPE_*
+    uint8_t enc;       // core encryption type, see Platform::securityName
     bool hidden;
     bool discovered;   // never seen before (not in the persisted known-BSSID filter)
     uint16_t seenCount;

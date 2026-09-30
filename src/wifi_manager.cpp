@@ -1,11 +1,10 @@
 #include "wifi_manager.h"
 
 #include <DNSServer.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
 #include <time.h>
 
 #include "config.h"
+#include "platform.h"
 #include "storage.h"
 #include "system.h"
 
@@ -41,7 +40,7 @@ void applyIpConfig(bool allowStatic) {
         WiFi.config(ip, gw, mask, dns1, dns2);
         LOGF("WiFi: static IP %s", config.ipAddr.c_str());
     } else {
-        WiFi.config(0u, 0u, 0u);
+        WiFi.config(IPAddress((uint32_t)0), IPAddress((uint32_t)0), IPAddress((uint32_t)0));  // DHCP
     }
 }
 
@@ -111,7 +110,7 @@ bool superviseAttempt(uint32_t now, bool connected) {
         return false;
     }
     wl_status_t st = WiFi.status();
-    if (st == WL_WRONG_PASSWORD) {
+    if (Platform::staWrongPassword()) {
         finishAttempt("wrong_password");
     } else if (now - s_lastBeginMs > STA_CONNECT_TIMEOUT_MS) {
         finishAttempt(st == WL_NO_SSID_AVAIL ? "no_ssid" : "failed");
@@ -131,16 +130,11 @@ bool superviseAttempt(uint32_t now, bool connected) {
 namespace WifiManager {
 
 void begin() {
-    uint8_t mac[6];
-    WiFi.macAddress(mac);
-    char suffix[5];
-    snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
-    s_apSsid = String(AP_SSID_PREFIX) + suffix;
+    s_apSsid = String(AP_SSID_PREFIX) + Platform::macSuffix();
 
     WiFi.persistent(false);  // credentials live in config.json, not the SDK flash area
     WiFi.setAutoReconnect(true);
-    WiFi.setSleepMode(WIFI_NONE_SLEEP);  // USB powered; keeps web latency low
-    WiFi.hostname(config.hostname);
+    Platform::wifiPrepare(config.hostname.c_str());
 
     if (haveCredentials()) {
         WiFi.mode(WIFI_STA);
@@ -167,8 +161,8 @@ void loop() {
         s_staTrying = false;
         s_connectedSince = now;
         LOGF("WiFi: connected to '%s', IP %s, RSSI %d dBm, channel %d", WiFi.SSID().c_str(),
-             WiFi.localIP().toString().c_str(), WiFi.RSSI(), WiFi.channel());
-        configTime(config.timezone.c_str(), NTP_SERVER);
+             WiFi.localIP().toString().c_str(), (int)WiFi.RSSI(), (int)WiFi.channel());
+        Platform::startTime(config.timezone.c_str(), NTP_SERVER);
     } else if (!connected && s_wasConnected) {
         s_wasConnected = false;
         s_disconnectedSince = now;
@@ -202,7 +196,7 @@ void loop() {
     }
 
     if (s_apActive) s_dns.processNextRequest();
-    if (s_mdns) MDNS.update();
+    if (s_mdns) Platform::mdnsUpdate();
 }
 
 void connectTo(const String& ssid, const String& password) {

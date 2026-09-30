@@ -5,6 +5,7 @@
 #include <LittleFS.h>
 
 #include "config.h"
+#include "platform.h"
 #include "system.h"
 
 DeviceConfig config;
@@ -46,6 +47,11 @@ void applyDefaults() {
     config.scanChannel = 0;
     config.uiTheme = "auto";
     config.uiAccent = DEFAULT_UI_ACCENT;
+    config.bleEnabled = true;
+    config.bleName = DEFAULT_BLE_NAME;
+    config.bleBthome = true;
+    config.bleScan = true;
+    config.bleScanInterval = DEFAULT_BLE_SCAN_INTERVAL;
 }
 
 void sanitize() {
@@ -63,6 +69,8 @@ void sanitize() {
     if (config.scanChannel > 13) config.scanChannel = 0;
     if (config.uiTheme != "light" && config.uiTheme != "dark") config.uiTheme = "auto";
     if (!Storage::isValidColor(config.uiAccent)) config.uiAccent = DEFAULT_UI_ACCENT;
+    if (config.bleName.isEmpty() || config.bleName.length() > 20) config.bleName = DEFAULT_BLE_NAME;
+    config.bleScanInterval = constrain(config.bleScanInterval, MIN_BLE_SCAN_INTERVAL, 3600);
     // A static setup is only usable when complete; otherwise fall back to DHCP.
     if (config.ipStatic && !(Storage::isValidIp(config.ipAddr) && Storage::isValidIp(config.ipGateway) &&
                              Storage::isValidIp(config.ipMask))) {
@@ -75,14 +83,11 @@ void sanitize() {
 namespace Storage {
 
 bool begin() {
-    // LittleFS on ESP8266 auto-formats an unformatted partition on first mount.
-    if (!LittleFS.begin()) {
+    if (!Platform::fsBegin()) {
         LOGF("LittleFS mount failed");
         return false;
     }
-    FSInfo info;
-    LittleFS.info(info);
-    LOGF("LittleFS: %u / %u bytes used", (unsigned)info.usedBytes, (unsigned)info.totalBytes);
+    LOGF("LittleFS: %u / %u bytes used", (unsigned)Platform::fsUsed(), (unsigned)Platform::fsTotal());
     return true;
 }
 
@@ -137,6 +142,11 @@ void loadConfig() {
     config.scanChannel = doc["scan_channel"] | 0;
     config.uiTheme = doc["ui_theme"] | "auto";
     config.uiAccent = doc["ui_accent"] | DEFAULT_UI_ACCENT;
+    config.bleEnabled = doc["ble_enabled"] | true;
+    config.bleName = doc["ble_name"] | DEFAULT_BLE_NAME;
+    config.bleBthome = doc["ble_bthome"] | true;
+    config.bleScan = doc["ble_scan"] | true;
+    config.bleScanInterval = doc["ble_scan_interval"] | DEFAULT_BLE_SCAN_INTERVAL;
     sanitize();
     LOGF("Config loaded (device '%s')", config.deviceName.c_str());
 }
@@ -181,6 +191,11 @@ bool saveConfig() {
     doc["scan_channel"] = config.scanChannel;
     doc["ui_theme"] = config.uiTheme;
     doc["ui_accent"] = config.uiAccent;
+    doc["ble_enabled"] = config.bleEnabled;
+    doc["ble_name"] = config.bleName;
+    doc["ble_bthome"] = config.bleBthome;
+    doc["ble_scan"] = config.bleScan;
+    doc["ble_scan_interval"] = config.bleScanInterval;
 
     // Write to a temp file and rename so a power cut never leaves a half-written config.
     File f = LittleFS.open(CONFIG_TMP_PATH, "w");

@@ -1,15 +1,19 @@
 #include "web_server.h"
 
 #include <ArduinoJson.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFi.h>
 #include <LittleFS.h>
+#if defined(ESP8266)
 #include <Updater.h>
+#else
+#include <Update.h>
+#endif
 
 #include "alerts.h"
+#include "ble_manager.h"
 #include "build_info.h"
 #include "config.h"
 #include "history.h"
+#include "platform.h"
 #include "statistics.h"
 #include "mqtt_manager.h"
 #include "storage.h"
@@ -20,10 +24,22 @@
 
 namespace {
 
-ESP8266WebServer server(HTTP_PORT);
+WebServerT server(HTTP_PORT);
+
+#ifndef vsnprintf_P
+#define vsnprintf_P vsnprintf
+#endif
+
+String updateError() {
+#if defined(ESP8266)
+    return Update.getErrorString();
+#else
+    return Update.errorString();
+#endif
+}
 
 // SPA routes: all serve index.html, the JS picks the view from the path.
-const char* const kPages[] = {"/", "/networks", "/channels", "/history", "/alerts", "/wifi", "/mqtt", "/update", "/settings", "/system"};
+const char* const kPages[] = {"/", "/networks", "/channels", "/history", "/alerts", "/wifi", "/ble", "/mqtt", "/update", "/settings", "/system"};
 
 // URLs phones/PCs probe to detect a captive portal; answering with a redirect
 // makes them pop up the WiFi setup page automatically.
@@ -173,22 +189,20 @@ void handleStatus() {
     sys["board"] = BOARD_NAME;
     sys["board_id"] = BOARD_ID;
     sys["chip"] = CHIP_NAME;
-    sys["chip_id"] = String(ESP.getChipId(), HEX);
+    sys["chip_id"] = String(Platform::chipId(), HEX);
     sys["cpu_mhz"] = ESP.getCpuFreqMHz();
-    sys["flash_size"] = ESP.getFlashChipRealSize();
+    sys["flash_size"] = Platform::flashSize();
     sys["sketch_size"] = ESP.getSketchSize();
     sys["free_sketch"] = ESP.getFreeSketchSpace();
     sys["sdk"] = ESP.getSdkVersion();
-    sys["core"] = ESP.getCoreVersion();
-    sys["ram_total"] = RAM_TOTAL_BYTES;
+    sys["core"] = Platform::coreVersion();
+    sys["ram_total"] = Platform::heapTotal();
     sys["free_heap"] = ESP.getFreeHeap();
-    sys["heap_fragmentation"] = ESP.getHeapFragmentation();
-    sys["max_free_block"] = ESP.getMaxFreeBlockSize();
-    sys["reset_reason"] = ESP.getResetReason();
-    FSInfo fs;
-    LittleFS.info(fs);
-    sys["fs_total"] = fs.totalBytes;
-    sys["fs_used"] = fs.usedBytes;
+    sys["heap_fragmentation"] = Platform::heapFragmentation();
+    sys["max_free_block"] = Platform::maxFreeBlock();
+    sys["reset_reason"] = Platform::resetReason();
+    sys["fs_total"] = Platform::fsTotal();
+    sys["fs_used"] = Platform::fsUsed();
 
     JsonObject wifi = d["wifi"].to<JsonObject>();
     bool connected = WifiManager::staConnected();
@@ -231,6 +245,24 @@ void handleStatus() {
     ui["theme"] = config.uiTheme;
     ui["accent"] = config.uiAccent;
     d["busy"] = System::busy();
+
+    JsonObject ble = d["ble"].to<JsonObject>();
+    ble["available"] = Ble::available();
+    if (Ble::available()) {
+        ble["enabled"] = Ble::enabled();
+        ble["advertising"] = Ble::advertising();
+        ble["address"] = Ble::address();
+        ble["name"] = config.bleName;
+        ble["bthome"] = config.bleBthome;
+        ble["scan"] = config.bleScan;
+        ble["scan_id"] = Ble::scanId();
+        ble["devices"] = Ble::lastScanDevices();
+        if (Ble::scanId()) {
+            ble["last_scan_ago"] = System::uptimeSeconds() - Ble::lastScanUptime();
+        } else {
+            ble["last_scan_ago"] = nullptr;
+        }
+    }
 
     JsonObject al = d["alerts"].to<JsonObject>();
     al["unread"] = Alerts::unread();
@@ -347,6 +379,40 @@ void handleChannels() {
                c == 1 ? "" : ",", c, channelToFrequency(c), s.aps, s.strong, s.medium, s.weak,
                rssiJson(s.avgRssi, a), rssiJson(s.maxRssi, b), rssiJson(s.minRssi, m), s.overlapping);
         w.addf(PSTR("\"load\":%.1f,\"congestion\":\"%s\"}"), s.load, Stats::levelName(s.level));
+    }
+    w.add("]}");
+    w.end();
+}
+
+// GET /api/ble  ->  recently seen BLE devices, newest first
+void handleBle() {
+    uint32_t now = System::uptimeSeconds();
+    uint32_t sid = Ble::scanId();
+    ChunkWriter w(F("application/json"));
+    w.addf(PSTR("{\"available\":%s,\"scan_id\":%lu,\"devices\":["), Ble::available() ? "true" : "false",
+           (unsigned long)sid);
+    bool first = true;
+    for (uint16_t i = 0; i < Ble::count(); i++) {
+        const Ble::Device& d = Ble::at(i);
+        char addr[18];
+        snprintf(addr, sizeof(addr), "%02X:%02X:%02X:%02X:%02X:%02X", d.addr[0], d.addr[1], d.addr[2], d.addr[3],
+                 d.addr[4], d.addr[5]);
+        const char* company = Ble::companyName(d.company);
+        w.addf(PSTR("%s{\"address\":\"%s\",\"random\":%s,\"rssi\":%d,\"present\":%s,\"seen\":%u,"
+                    "\"last_seen_ago\":%lu,\"company\":"),
+               first ? "" : ",", addr, d.randomAddr ? "true" : "false", d.rssi, d.lastScanId == sid ? "true" : "false",
+               d.seen, (unsigned long)(now - d.lastSeen));
+        if (company) {
+            w.addf(PSTR("\"%s\""), company);
+        } else if (d.company != 0xFFFF) {
+            w.addf(PSTR("\"0x%04X\""), d.company);
+        } else {
+            w.add("null");
+        }
+        w.buf() += F(",\"name\":");
+        appendJsonString(w.buf(), d.name);
+        w.add("}");
+        first = false;
     }
     w.add("]}");
     w.end();
@@ -582,6 +648,11 @@ void handleGetConfig() {
     d["scan_channel"] = config.scanChannel;
     d["ui_theme"] = config.uiTheme;
     d["ui_accent"] = config.uiAccent;
+    d["ble_enabled"] = config.bleEnabled;
+    d["ble_name"] = config.bleName;
+    d["ble_bthome"] = config.bleBthome;
+    d["ble_scan"] = config.bleScan;
+    d["ble_scan_interval"] = config.bleScanInterval;
     JsonObject lim = d["limits"].to<JsonObject>();
     lim["min_scan_interval"] = MIN_SCAN_INTERVAL_S;
     lim["max_scan_interval"] = MAX_SCAN_INTERVAL_S;
@@ -803,6 +874,23 @@ void handlePostConfig() {
     if (!optString("ui_accent", next.uiAccent, 7, false, Storage::isValidColor))
         return sendError(400, F("ui_accent: color as #rrggbb"));
 
+    // ---- BLE ----
+    auto bleNameOk = [](const String& s) { return isPrintableAscii(s); };
+    if (!optBool("ble_enabled", next.bleEnabled) || !optBool("ble_bthome", next.bleBthome) ||
+        !optBool("ble_scan", next.bleScan))
+        return sendError(400, F("BLE switches must be booleans"));
+    if (!optString("ble_name", next.bleName, 20, false, bleNameOk)) return sendError(400, F("ble_name: 1-20 characters"));
+    if (!body["ble_scan_interval"].isNull()) {
+        int v = body["ble_scan_interval"] | 0;
+        if (!body["ble_scan_interval"].is<int>() || v < MIN_BLE_SCAN_INTERVAL || v > 3600)
+            return sendError(400, F("ble_scan_interval: 15-3600 s"));
+        next.bleScanInterval = v;
+    }
+    // The BLE stack starts once; switching it on/off or renaming needs a restart.
+    rebootRequired |= Ble::available() && (next.bleName != config.bleName || next.bleEnabled != config.bleEnabled);
+    bool bleChanged = next.bleBthome != config.bleBthome || next.bleScan != config.bleScan ||
+                      next.bleScanInterval != config.bleScanInterval;
+
     bool retentionChanged = next.historyHours != config.historyHours;
     bool mqttChanged = next.mqttEnabled != config.mqttEnabled || next.mqttHost != config.mqttHost ||
                        next.mqttPort != config.mqttPort || next.mqttUser != config.mqttUser ||
@@ -813,6 +901,7 @@ void handlePostConfig() {
     if (!Storage::saveConfig()) return sendError(500, F("Could not write config to flash"));
     if (retentionChanged) History::prune();
     if (mqttChanged) Mqtt::reconfigure();
+    if (bleChanged) Ble::reconfigure();
 
     JsonDocument d;
     d["ok"] = true;
@@ -875,13 +964,17 @@ void handleFirmwareUpload() {
             return;
         }
         System::setBusy(true);
+#if defined(ESP8266)
         uint32_t maxSize = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+#else
+        uint32_t maxSize = UPDATE_SIZE_UNKNOWN;  // the next OTA partition
+#endif
         LOGF("OTA: receiving firmware '%s' (max %lu bytes)", up.filename.c_str(), (unsigned long)maxSize);
-        if (!Update.begin(maxSize, U_FLASH)) s_otaError = Update.getErrorString();
+        if (!Update.begin(maxSize, U_FLASH)) s_otaError = updateError();
     } else if (up.status == UPLOAD_FILE_WRITE) {
         if (s_otaError.length()) return;
         scanTag(up.buf, up.currentSize);
-        if (Update.write(up.buf, up.currentSize) != up.currentSize) s_otaError = Update.getErrorString();
+        if (Update.write(up.buf, up.currentSize) != up.currentSize) s_otaError = updateError();
     } else if (up.status == UPLOAD_FILE_END) {
         if (s_otaError.length()) {
             Update.end(false);
@@ -894,7 +987,7 @@ void handleFirmwareUpload() {
         } else if (board != BOARD_ID) {
             s_otaError = String(F("This firmware is for board '")) + board + F("', this device is '" BOARD_ID "'");
         } else if (!Update.end(true)) {
-            s_otaError = Update.getErrorString();
+            s_otaError = updateError();
         } else {
             LOGF("OTA: firmware %s written (%lu bytes)", s_otaTag.substring(0, sep).c_str(),
                  (unsigned long)up.totalSize);
@@ -1005,7 +1098,12 @@ void handleNotFound() {
 namespace WebUi {
 
 void begin() {
+#if defined(ESP8266)
     server.collectHeaders(CSRF_HEADER);
+#else
+    static const char* headers[] = {CSRF_HEADER};
+    server.collectHeaders(headers, 1);
+#endif
 
     for (const char* p : kPages) server.on(p, HTTP_GET, handleIndex);
     server.on(F("/embed"), HTTP_GET, handleEmbed);
@@ -1021,6 +1119,7 @@ void begin() {
     server.on(F("/api/history/live"), HTTP_GET, handleHistoryLive);
     server.on(F("/api/history/ap"), HTTP_GET, handleHistoryAp);
     server.on(F("/api/alerts"), HTTP_GET, handleAlerts);
+    server.on(F("/api/ble"), HTTP_GET, handleBle);
     server.on(F("/api/alerts/ack"), HTTP_POST, handleAlertsAck);
     server.on(F("/api/config"), HTTP_GET, handleGetConfig);
     server.on(F("/api/config"), HTTP_POST, handlePostConfig);

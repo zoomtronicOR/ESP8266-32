@@ -1,8 +1,9 @@
 #include "console.h"
 
-#include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <lwip/apps/sntp.h>
+
+#include "platform.h"
 
 #include "history.h"
 #include "storage.h"
@@ -49,11 +50,11 @@ void printStatus() {
     if (up) {
         LOGF("DNS %s / %s, NTP server '%s' reachability 0x%02x, time %lu", WiFi.dnsIP(0).toString().c_str(),
              WiFi.dnsIP(1).toString().c_str(), sntp_getservername(0) ? sntp_getservername(0) : "(none)",
-             sntp_getreachability(0), (unsigned long)time(nullptr));
+             (unsigned)sntp_getreachability(0), (unsigned long)time(nullptr));
     }
     LOGF("Saved network: %s", config.wifiSsid.length() ? config.wifiSsid.c_str() : "(none)");
     LOGF("Scans: %lu, tracked APs %u, free heap %u, time %s", (unsigned long)Scanner::scanId(), Scanner::count(),
-         ESP.getFreeHeap(), System::timeSynced() ? "synced" : "not synced");
+         (unsigned)ESP.getFreeHeap(), System::timeSynced() ? "synced" : "not synced");
 }
 
 void execute(const String& line) {
@@ -72,7 +73,7 @@ void execute(const String& line) {
         // lwIP keeps the pointer, so the name must outlive this call
         static char server[64];
         strlcpy(server, t[1].c_str(), sizeof(server));
-        configTime(config.timezone.c_str(), server);
+        Platform::startTime(config.timezone.c_str(), server);
         LOGF("NTP: restarted with server '%s'", server);
     } else if (t[0] == "ntptest" && n >= 2) {
         // Diagnostic only: one raw NTP request, waits up to 2 s for the answer.

@@ -24,6 +24,7 @@
     <a href="/history" data-page="history">History</a>
     <a href="/alerts" data-page="alerts">Alerts<span class="badge" id="nav-badge" hidden></span></a>
     <a href="/wifi" data-page="wifi">WiFi</a>
+    <a href="/ble" data-page="ble" id="nav-ble" hidden>BLE</a>
     <a href="/mqtt" data-page="mqtt">MQTT</a>
     <a href="/update" data-page="update">Update</a>
     <a href="/settings" data-page="settings">Settings</a>
@@ -70,6 +71,7 @@
       <div class="widget"><div class="w-label">New APs</div><div class="w-value" id="w-new">—</div></div>
       <div class="widget"><div class="w-label">Device RSSI</div><div class="w-value" id="w-rssi">—</div></div>
       <div class="widget"><div class="w-label">Uptime</div><div class="w-value" id="w-uptime">—</div></div>
+      <a class="widget widget-link" href="/ble" data-page="ble" id="w-ble-box" hidden><div class="w-label">BLE devices</div><div class="w-value" id="w-ble">—</div></a>
       <a class="widget widget-link" href="/alerts" data-page="alerts"><div class="w-label">Unread alerts</div><div class="w-value" id="w-alerts">—</div></a>
     </div>
 
@@ -289,6 +291,78 @@
           <code>strong_ap</code>, <code>channel_density</code>, ...).</li>
         <li>The Home Assistant <i>Alert</i> binary sensor is on while there are unread warnings or critical
           alerts. The <i>Mark alerts as read</i> button in Home Assistant clears it, like the button on this page.</li>
+      </ul>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- Bluetooth LE (boards with a BLE radio) -->
+  <section id="page-ble" class="page" hidden>
+   <div class="side-grid">
+   <div>
+    <div class="card form wide">
+      <h2>Bluetooth LE</h2>
+      <dl class="kv" id="ble-kv"></dl>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">Nearby BLE devices</h2>
+        <span class="spacer"></span>
+        <label><input type="checkbox" id="ble-present" checked> In the latest scan only</label>
+      </div>
+      <div class="table-wrap">
+        <table class="net-table" id="ble-table">
+          <thead><tr>
+            <th>Address</th><th>Name</th><th>Maker</th><th class="num">RSSI</th><th>Quality</th>
+            <th class="num">Seen</th><th class="num">Last seen</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="muted small note">Phones, watches and earbuds use random addresses that change every few minutes,
+        so one device can appear several times. Names are shown only when a device advertises one.</p>
+    </div>
+   </div>
+   <div>
+    <form id="ble-form" class="card form wide" autocomplete="off">
+      <h2>BLE settings</h2>
+      <label class="check"><input type="checkbox" name="ble_enabled"> Enable Bluetooth LE</label>
+      <label>Device name (advertised) <input name="ble_name" maxlength="20" required></label>
+      <label class="check"><input type="checkbox" name="ble_bthome"> BTHome advertising for Home Assistant</label>
+      <label class="check"><input type="checkbox" name="ble_scan"> Scan for nearby BLE devices</label>
+      <label>Scan every (seconds) <input name="ble_scan_interval" type="number" min="15" max="3600" required></label>
+      <div class="form-actions">
+        <button type="submit">Save</button>
+        <span id="ble-msg" class="small"></span>
+      </div>
+    </form>
+    <div class="card guide">
+      <h2>How BLE is used</h2>
+      <h3>Home Assistant over Bluetooth (BTHome)</h3>
+      <ol>
+        <li>Home Assistant needs Bluetooth near the device: a Bluetooth adapter on the Home Assistant machine,
+          or an ESPHome Bluetooth proxy.</li>
+        <li>With <i>BTHome advertising</i> on, Home Assistant discovers a new <b>BTHome</b> device by itself
+          (<i>Settings → Devices &amp; services</i>). No pairing and no MQTT needed.</li>
+        <li>Its sensors: <b>Count</b> = WiFi access points detected, <b>Count 2</b> = BLE devices nearby,
+          <b>Count 3</b> = recommended WiFi channel (0 until the first scan). Rename them in Home Assistant.</li>
+      </ol>
+      <p>MQTT keeps working in parallel and remains the complete integration; BTHome is a small, cable-free
+        extra.</p>
+      <h3>GATT service (any BLE app)</h3>
+      <ul>
+        <li>Service <code>6e5a0001-7a1d-4c3b-9f2e-0e5f5a57a001</code></li>
+        <li>Characteristic <code>6e5a0002-7a1d-4c3b-9f2e-0e5f5a57a001</code> (read / notify): a JSON summary,
+          e.g. <code>{"aps":12,"open":1,"channels":5,"strongest":-34,"recommended":11,"ble":9}</code></li>
+        <li>Try it with <i>nRF Connect</i> on a phone: connect to the device name above and read the characteristic.</li>
+      </ul>
+      <h3>Good to know</h3>
+      <ul>
+        <li>WiFi and BLE share one radio. Scans take turns: a BLE scan (5 s, passive) never runs during a WiFi
+          scan.</li>
+        <li>Changing the name or switching BLE on/off takes effect after a reboot.</li>
+        <li>The scan only listens (passive). It does not connect to other devices.</li>
       </ul>
     </div>
    </div>

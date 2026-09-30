@@ -1,14 +1,14 @@
 # ESP WiFi Monitor
 
 A small, standalone **2.4 GHz WiFi monitor and channel analyzer** that runs entirely on an
-**ESP8266 NodeMCU**. It scans the networks around it, keeps statistics and history, shows everything
+**ESP8266 NodeMCU** or an **ESP32-C3** (with Bluetooth LE). It scans the networks around it, keeps statistics and history, shows everything
 in a web interface hosted on the device, and integrates with **Home Assistant over MQTT**. It needs no
 cloud, PC, Raspberry Pi or Docker.
 
 > Developed by Zoomtronic and a bit of Claude.
 
-The project is designed to move to **ESP32** later (with BLE) without changing the web UI or the MQTT
-structure. The product name is therefore board-neutral.
+One code base, one web UI and one MQTT structure for both boards. Board differences are isolated in a small
+platform layer.
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -65,6 +65,12 @@ structure. The product name is therefore board-neutral.
 - Event entity *Alert* with one event type per alert type
 - Chart-only page `/embed` for a Home Assistant *Webpage* (iframe) card
 
+**Bluetooth LE** (ESP32-C3)
+- **BTHome** advertising: Home Assistant discovers the device over Bluetooth by itself (WiFi APs, BLE devices
+  nearby, recommended channel), no pairing or MQTT needed
+- Passive scan of nearby BLE devices (address, name, maker, RSSI) on its own **BLE** page
+- GATT service with a JSON summary, readable with any BLE app (e.g. nRF Connect)
+
 **System**
 - Setup hotspot with captive portal on first boot or when the WiFi is unreachable
 - mDNS (`http://wifi-monitor.local`), NTP time with a configurable time zone
@@ -76,12 +82,12 @@ structure. The product name is therefore board-neutral.
 
 ## Hardware
 
-| Required | Notes |
-|---|---|
-| ESP8266 NodeMCU dev board (ESP8266EX, 4 MB flash) | CH340 or CP2102 USB-serial |
-| USB cable and a 5 V USB power supply | |
+| Board | PlatformIO env | Notes |
+|---|---|---|
+| ESP8266 NodeMCU (ESP8266EX, 4 MB flash) | `nodemcuv2` | WiFi only, ~16 KB free RAM |
+| ESP32-C3 mini with 4 MB flash and native USB | `esp32c3` | WiFi + BLE, reports WPA3, ~70 KB free RAM |
 
-No other hardware is needed.
+Plus a USB cable and a 5 V USB power supply. No other hardware is needed.
 
 ---
 
@@ -90,13 +96,13 @@ No other hardware is needed.
 The ESP8266 is a WiFi client chip, not a spectrum analyzer. This project reports what a standard WiFi
 scan can see and labels anything else as **Detected**, **Estimated** or **Unknown**:
 
-- **2.4 GHz only**. 5 GHz and 6 GHz networks are not visible.
+- **2.4 GHz only** (both boards). 5 GHz and 6 GHz networks are not visible.
 - **No real airtime/channel utilization.** Congestion is an *estimate* from detected APs, their signal
   strength, 20 MHz channel overlap and repeated scans.
 - **Channel width is not reported** by the scan. Charts assume 20 MHz.
-- **WPA3 cannot be distinguished** (reported as WPA2).
-- **No Bluetooth/BLE** on the ESP8266. BLE is planned for the ESP32 version.
-- **No TLS for MQTT**: not enough free RAM on the ESP8266.
+- **ESP8266 only**: WPA3 cannot be distinguished (reported as WPA2), no Bluetooth, no TLS for MQTT (not
+  enough free RAM).
+- WiFi and BLE share one radio on the ESP32-C3, so WiFi and BLE scans take turns.
 
 The web interface has **no login**. The device is meant for a trusted local network only. **Never expose
 it to the internet.** POST requests require an `X-Requested-With` header, which protects against
@@ -114,9 +120,9 @@ Install [PlatformIO](https://platformio.org/) (CLI or VS Code extension), then:
 git clone https://github.com/zoomtronicOR/ESP8266-32.git
 cd ESP8266-32
 
-# set upload_port / monitor_port in platformio.ini to your serial port (e.g. COM8 or /dev/ttyUSB0)
-pio run -t upload        # firmware
-pio run -t uploadfs      # web interface (LittleFS image from data/). Only for the first install!
+# set upload_port / monitor_port in platformio.ini to your serial port (e.g. COM9 or /dev/ttyACM0)
+pio run -e esp32c3 -t upload       # firmware (or -e nodemcuv2 for the ESP8266)
+pio run -e esp32c3 -t uploadfs     # web interface (LittleFS image from data/). Only for the first install!
 ```
 
 > `uploadfs` writes a fresh file system and **erases the saved settings and history**. For later web
@@ -146,11 +152,11 @@ The MQTT page has a step-by-step guide, an example automation and ready-made das
 
 | What | How |
 |---|---|
-| Firmware | Build with `pio run`, then upload `.pio/build/nodemcuv2/firmware.bin` on the **Update** page |
+| Firmware | Build with `pio run`, then upload `.pio/build/<env>/firmware.bin` on the **Update** page |
 | Web files | Select the `data` folder on the **Update** page |
 | Web files from the PC | `python tools/update_web.py --http <device-ip>` (over WiFi, ~5 s) |
-| Web files over USB | `python tools/update_web.py COM8` (reads, patches and rewrites the file system) |
-| Firmware from the PC | `curl -H X-Requested-With:wifi-monitor -F file=@.pio/build/nodemcuv2/firmware.bin http://<device-ip>/api/update/firmware` |
+| Web files over USB (ESP8266) | `python tools/update_web.py COM8` (reads, patches and rewrites the file system) |
+| Firmware from the PC | `curl -H X-Requested-With:wifi-monitor -F file=@.pio/build/<env>/firmware.bin http://<device-ip>/api/update/firmware` |
 
 All of these keep the settings, history and alerts. The firmware carries a tag
 (`ESPWM-FW|<version>|<board>|`). Uploads without the tag, or built for another board, are refused, and
@@ -172,6 +178,7 @@ Base topic: `wifi-monitor/<hostname>` (configurable). Payloads are JSON.
 | `networks` | AP list (privacy options: hide SSIDs, anonymize BSSIDs) |
 | `new_ap`, `alert` | `ON` / `OFF` (retained) |
 | `alerts` | One message per alert (`event_type`, `severity`, `message`, …) |
+| `ble` | BLE devices nearby and strongest RSSI (ESP32-C3) |
 | `cmd` | Send `scan` or `ack_alerts` |
 
 ---
@@ -187,6 +194,7 @@ Base topic: `wifi-monitor/<hostname>` (configurable). Payloads are JSON.
 | GET | `/api/history/live` | Last scans from RAM |
 | GET | `/api/history/ap` | One AP's signal (`?bssid=` with `&live=1` or `&hours=`) |
 | GET | `/api/alerts` | Alert list |
+| GET | `/api/ble` | Recently seen BLE devices (ESP32-C3) |
 | GET/POST | `/api/config` | Settings (partial updates; secrets are write-only) |
 | POST | `/api/scan`, `/api/alerts/ack`, `/api/wifi/connect` | Actions |
 | POST | `/api/update/firmware`, `/api/update/webfile?path=` | OTA |
@@ -206,13 +214,14 @@ All POST requests need the header `X-Requested-With: wifi-monitor`.
 ## Project structure
 
 ```text
-src/            firmware modules (scanner, statistics, history, alerts, MQTT, web server, WiFi manager, ...)
-include/        config.h (limits, defaults, board definitions)
+src/            firmware modules (scanner, statistics, history, alerts, MQTT, BLE, web server, WiFi manager, ...)
+src/platform.*  the only place with ESP8266 / ESP32 differences
+include/        config.h (board definitions, limits, defaults)
+partitions_esp32c3.csv  ESP32-C3 flash layout (two OTA slots + LittleFS)
 data/           web interface (index.html, embed.html, css/, js/)
 tools/          update_web.py (web update without data loss), build_info.py (build timestamp)
 docs/SPEC.md    full requirements (Serbian); items impossible on ESP8266 are commented out
 docs/images/    README screenshots (invented demo data)
-CLAUDE.md       architecture and developer notes
 ```
 
 ---
@@ -224,7 +233,8 @@ CLAUDE.md       architecture and developer notes
 - [x] Phase 3: MQTT, MQTT discovery, Home Assistant
 - [x] Phase 4: alerts, new AP detection, channel analysis, heatmap
 - [x] Phase 5: OTA, captive portal, advanced settings (web login intentionally left out: LAN-only device)
-- [ ] ESP32 version with BLE (same web UI and MQTT structure)
+- [x] ESP32-C3 version with BLE: BTHome, BLE scan, GATT (same web UI and MQTT structure)
+- [ ] Channel width (20/40 MHz) and more from the ESP32 scan data
 
 ---
 

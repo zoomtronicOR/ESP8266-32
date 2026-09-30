@@ -1,6 +1,6 @@
 #include "wifi_scanner.h"
 
-#include <ESP8266WiFi.h>
+#include "platform.h"
 
 #include "config.h"
 #include "alerts.h"
@@ -64,8 +64,8 @@ void processResults(int n) {
         if (r->rssi < r->rssiMin) r->rssiMin = r->rssi;
         if (r->rssi > r->rssiMax) r->rssiMax = r->rssi;
         r->channel = (uint8_t)WiFi.channel(i);
-        r->enc = WiFi.encryptionType(i);
-        r->hidden = WiFi.isHidden(i);
+        r->enc = (uint8_t)WiFi.encryptionType(i);
+        r->hidden = Platform::scanHidden(i);
         if (r->seenCount < UINT16_MAX) {
             r->seenCount++;
             r->rssiSum += r->rssi;
@@ -130,7 +130,7 @@ void loop(bool allowed) {
     s_scanning = true;
     s_scanStartMs = millis();
     // scanChannel 0 = all channels; 1..13 = only that one (much shorter scan)
-    WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/true, config.scanChannel);
+    Platform::startScan(config.scanChannel);
 }
 
 bool requestScan() {
@@ -171,7 +171,7 @@ ScanSummary summary() {
         const ApRecord& r = s_recs[i];
         if (!isPresent(r)) continue;
         s.present++;
-        if (r.enc == ENC_TYPE_NONE) s.open++;
+        if (Platform::encIsOpen(r.enc)) s.open++;
         if (r.hidden) s.hidden++;
         if (r.rssi >= STRONG_RSSI_DBM) s.strong++;
         if (isNew(r)) s.isNew++;

@@ -2,11 +2,22 @@
 
 // ---- Firmware ----------------------------------------------------------------
 #define FW_NAME    "ESP WiFi Monitor"  // product name is board-neutral (ESP8266 now, ESP32 later)
+// ---- Board -------------------------------------------------------------------------
+#if defined(ESP8266)
 #define BOARD_NAME "ESP8266 NodeMCU"
 #define CHIP_NAME  "ESP8266EX"
 #define BOARD_ID   "esp8266"  // firmware tag: OTA refuses images built for another board
-#define RAM_TOTAL_BYTES 81920  // DRAM (data + bss + heap), for the System page usage bar
-#define FW_VERSION "0.5.0"
+#define MAX_TRACKED_APS_LIMIT 150  // upper bound for the runtime "max_aps" setting
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+#define BOARD_NAME "ESP32-C3"
+#define CHIP_NAME  "ESP32-C3"
+#define BOARD_ID   "esp32c3"
+#define MAX_TRACKED_APS_LIMIT 300
+#define FEATURE_BLE_NATIVE 1       // built-in Bluetooth LE radio
+#else
+#error "Add a board block to include/config.h"
+#endif
+#define FW_VERSION "0.6.0"
 
 // ---- Defaults (overridable at runtime via /api/config, stored in LittleFS) ----
 #define DEFAULT_DEVICE_NAME     "wifi-monitor-01"
@@ -27,7 +38,6 @@
 #define MAX_SCAN_INTERVAL_S    1800
 #define MANUAL_SCAN_MIN_GAP_MS 5000
 #define SCAN_TIMEOUT_MS        15000
-#define MAX_TRACKED_APS_LIMIT  150     // upper bound for the runtime "max_aps" setting
 #define MIN_TRACKED_APS        10
 #define STRONG_RSSI_DBM        (-67)   // ">= this" counts as a strong AP
 #define NEW_AP_WINDOW_S        600     // AP first seen after the baseline scan within this window = "new"
@@ -70,13 +80,26 @@
 #define RESTART_LOOP_COUNT        3       // abnormal restarts in a row -> alert
 
 // ---- Hardware ------------------------------------------------------------------------
+#if defined(ESP8266)
 #define RESET_BUTTON_PIN      0       // NodeMCU "FLASH" button (GPIO0, active low)
 #define STATUS_LED_PIN        2       // on-board LED (GPIO2, active low)
+#else
+#define RESET_BUTTON_PIN      9       // ESP32-C3 "BOOT" button (GPIO9, active low)
+#define STATUS_LED_PIN        8       // on-board LED on C3 mini boards (GPIO8, active low)
+#endif
 #define RESET_BUTTON_HOLD_MS  10000   // hold this long at runtime -> factory reset
 #define RESET_BUTTON_BLINK_MS 3000    // LED starts blinking after this long, as a warning
 
 // ---- OTA ---------------------------------------------------------------------------
 #define WEBFILE_MAX_BYTES     (200 * 1024)
+
+// ---- Bluetooth LE (boards with FEATURE_BLE_NATIVE) ------------------------------------
+#define DEFAULT_BLE_NAME          "WiFi-Monitor"
+#define DEFAULT_BLE_SCAN_INTERVAL 60      // s between passive BLE scans
+#define MIN_BLE_SCAN_INTERVAL     15
+#define BLE_SCAN_DURATION_MS      5000
+#define BLE_ADV_REFRESH_MS        30000   // BTHome values / GATT summary refresh
+#define BLE_MAX_DEVICES           60      // recently seen BLE devices kept for the web page
 
 // ---- Channel analysis (estimated, not RF measurement) ------------------------------
 #define CONGESTION_SCANS          10      // averaged over up to this many recent scans
@@ -101,7 +124,7 @@
 // ---- Not available on ESP8266 hardware (kept for the future BLE-capable board) --
 // ESP8266 has no Bluetooth radio and only a 2.4 GHz WiFi radio. These options are
 // intentionally disabled; see docs/SPEC.md §2 and the planned ESP32 variant.
-// #define FEATURE_BLE_NATIVE      1   // built-in BLE (ESP32 only)
+// FEATURE_BLE_NATIVE: set in the board block above for boards with a BLE radio
 // #define FEATURE_WIFI_5GHZ       1   // 5 GHz scanning (ESP32-C5 / dedicated radio)
 // #define FEATURE_WIFI_6GHZ       1   // 6 GHz / WiFi 6E scanning
 // #define FEATURE_AIRTIME_UTIL    1   // real channel airtime utilization (needs RF sniffer)

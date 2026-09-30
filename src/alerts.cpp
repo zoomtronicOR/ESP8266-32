@@ -1,12 +1,11 @@
 #include "alerts.h"
 
-#include <ESP8266WiFi.h>
 #include <LittleFS.h>
 #include <time.h>
-#include <user_interface.h>
 
 #include "config.h"
 #include "mqtt_manager.h"
+#include "platform.h"
 #include "storage.h"
 #include "system.h"
 #include "wifi_manager.h"
@@ -163,9 +162,8 @@ void loadAlerts() {
 }
 
 void bootAlerts() {
-    const rst_info* ri = ESP.getResetInfoPtr();
-    bool watchdog = ri->reason == REASON_WDT_RST || ri->reason == REASON_SOFT_WDT_RST;
-    bool exception = ri->reason == REASON_EXCEPTION_RST;
+    bool watchdog = Platform::resetByWatchdog();
+    bool exception = Platform::resetByCrash();
     s_boot.boots++;
     if (watchdog) s_boot.watchdogResets++;
     if (exception) s_boot.exceptionResets++;
@@ -174,8 +172,8 @@ void bootAlerts() {
     saveBoot();
 
     if (!config.alertSystem) return;
-    if (watchdog) commit(raise(ALERT_WATCHDOG, SEV_CRITICAL, ri->reason));
-    if (exception) commit(raise(ALERT_EXCEPTION, SEV_CRITICAL, ri->exccause));
+    if (watchdog) commit(raise(ALERT_WATCHDOG, SEV_CRITICAL));
+    if (exception) commit(raise(ALERT_EXCEPTION, SEV_CRITICAL, Platform::crashCause()));
     if (s_boot.abnormalInARow >= RESTART_LOOP_COUNT) {
         commit(raise(ALERT_RESTART_LOOP, SEV_CRITICAL, s_boot.abnormalInARow));
     }
@@ -257,7 +255,11 @@ void loop() {
     if (millis() - s_lastCheckMs < 1000) return;
     s_lastCheckMs = millis();
     checkSystem();
-    if (s_knownDirty && (s_knownSavedMs == 0 || millis() - s_knownSavedMs >= KNOWN_SAVE_INTERVAL_MS)) saveKnown();
+    // Never save while the baseline is still learning: after a reboot a partial filter on
+    // flash would end the learning phase early and report already-present APs as new.
+    if (s_knownDirty && !s_baselineScans &&
+        (s_knownSavedMs == 0 || millis() - s_knownSavedMs >= KNOWN_SAVE_INTERVAL_MS))
+        saveKnown();
 }
 
 void onScan() {
@@ -277,7 +279,7 @@ void onScan() {
         if (newAlerts >= MAX_NEW_AP_ALERTS_PER_SCAN) continue;
         newAlerts++;
         if (config.alertNewAp) raiseForAp(ALERT_NEW_AP, SEV_INFO, r);
-        if (config.alertOpenAp && r.enc == ENC_TYPE_NONE) raiseForAp(ALERT_OPEN_AP, SEV_WARNING, r);
+        if (config.alertOpenAp && Platform::encIsOpen(r.enc)) raiseForAp(ALERT_OPEN_AP, SEV_WARNING, r);
         if (config.alertStrongAp && r.rssi >= config.alertStrongRssi) raiseForAp(ALERT_STRONG_AP, SEV_WARNING, r);
     }
     if (s_baselineScans && --s_baselineScans == 0) {
@@ -381,7 +383,7 @@ String message(const Alert& a, bool withIdentity) {
 const BootInfo& bootInfo() { return s_boot; }
 
 void flush() {
-    if (s_knownDirty) saveKnown();
+    if (s_knownDirty && !s_baselineScans) saveKnown();
 }
 
 void clear() {

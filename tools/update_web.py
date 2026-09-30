@@ -5,7 +5,7 @@ erases the saved WiFi network and the history. This script never does that.
 
 Usage:
   python tools/update_web.py --http 192.168.88.65   # over WiFi (fast, device keeps running)
-  python tools/update_web.py [COM8]                 # over USB serial (works even without WiFi)
+  python tools/update_web.py [COM8]                 # over USB serial, ESP8266 only (works without WiFi)
 
 HTTP mode uploads each file to /api/update/webfile (the same endpoint as the
 Update page). Serial mode reads the LittleFS partition, replaces the web files,

@@ -1,6 +1,7 @@
 #include <Arduino.h>
 
 #include "alerts.h"
+#include "ble_manager.h"
 #include "config.h"
 #include "console.h"
 #include "history.h"
@@ -25,7 +26,8 @@ void setup() {
     History::begin();
     Mqtt::begin();
     WebUi::begin();
-    LOGF("Boot done, free heap %u bytes", ESP.getFreeHeap());
+    Ble::begin();
+    LOGF("Boot done, free heap %u bytes", (unsigned)ESP.getFreeHeap());
 }
 
 // Everything is cooperative and non-blocking: the scan runs asynchronously in
@@ -33,10 +35,12 @@ void setup() {
 void loop() {
     System::loop();
     WifiManager::loop();
-    Scanner::loop(WifiManager::scanAllowed() && !System::busy());
+    // one radio: the WiFi scan waits while BLE scans (and BLE waits for WiFi scans)
+    Scanner::loop(WifiManager::scanAllowed() && !System::busy() && !Ble::scanning());
     History::loop();
     Mqtt::loop();
     Alerts::loop();
+    Ble::loop();
     WebUi::loop();
     Console::loop();
 }

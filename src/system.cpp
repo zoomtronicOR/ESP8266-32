@@ -6,6 +6,7 @@
 #include "config.h"
 #include "history.h"
 #include "mqtt_manager.h"
+#include "platform.h"
 #include "storage.h"
 
 namespace {
@@ -43,7 +44,7 @@ void checkResetButton() {
 namespace System {
 
 void begin() {
-    LOGF("Reset reason: %s", ESP.getResetReason().c_str());
+    LOGF("Reset reason: %s", Platform::resetReason().c_str());
     LOGF("%s", String(FPSTR(kFirmwareTag)).c_str());
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
     pinMode(STATUS_LED_PIN, OUTPUT);
@@ -89,7 +90,7 @@ bool factoryReset() {
     History::clear();
     Alerts::clear();
     bool ok = Storage::factoryReset();
-    ESP.eraseConfig();  // SDK copy of WiFi credentials, in case anything ever stored one
+    Platform::eraseWifiConfig();  // SDK copy of WiFi credentials, in case anything ever stored one
     scheduleReboot(500);
     return ok;
 }
