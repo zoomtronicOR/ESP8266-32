@@ -66,6 +66,7 @@ void processResults(int n) {
         r->channel = (uint8_t)WiFi.channel(i);
         r->enc = (uint8_t)WiFi.encryptionType(i);
         r->hidden = Platform::scanHidden(i);
+        Platform::scanWidth(i, r->width, r->secondary);
         if (r->seenCount < UINT16_MAX) {
             r->seenCount++;
             r->rssiSum += r->rssi;

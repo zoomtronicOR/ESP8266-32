@@ -65,6 +65,11 @@ void wifiPrepare(const char* hostname) {
 }
 void startScan(uint8_t channel) { WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/true, channel); }
 bool scanHidden(int i) { return WiFi.isHidden(i); }
+bool scanReportsWidth() { return false; }
+void scanWidth(int, uint8_t& width, int8_t& secondary) {  // not in the ESP8266 scan results
+    width = 0;
+    secondary = 0;
+}
 bool encIsOpen(uint8_t enc) { return enc == ENC_TYPE_NONE; }
 
 // The ESP8266 scan cannot tell WPA3 apart; CCMP is reported as "WPA2".
@@ -154,6 +159,21 @@ void startScan(uint8_t channel) {
     WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/true, /*passive=*/false, /*max_ms_per_chan=*/120, channel);
 }
 bool scanHidden(int i) { return WiFi.SSID(i).isEmpty(); }
+bool scanReportsWidth() { return true; }
+// From the AP's HT operation element: a secondary channel means it runs 40 MHz (HT40+/-).
+void scanWidth(int i, uint8_t& width, int8_t& secondary) {
+    auto* r = static_cast<wifi_ap_record_t*>(WiFi.getScanInfoByIndex(i));
+    width = 20;
+    secondary = 0;
+    if (!r) return;
+    if (r->second == WIFI_SECOND_CHAN_ABOVE) {
+        width = 40;
+        secondary = 1;
+    } else if (r->second == WIFI_SECOND_CHAN_BELOW) {
+        width = 40;
+        secondary = -1;
+    }
+}
 bool encIsOpen(uint8_t enc) { return enc == WIFI_AUTH_OPEN; }
 
 // Unlike the ESP8266, the ESP32 scan reports WPA3.

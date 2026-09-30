@@ -6,10 +6,21 @@
 
 namespace {
 
-// Share of a 20 MHz (~22 MHz) channel that overlaps one `d` channels away (5 MHz steps).
-float overlapWeight(int d) {
-    d = abs(d);
-    return d > 4 ? 0.0f : 1.0f - 0.2f * d;
+// Channels an AP's signal is centred on: its primary channel, extended by 4 channels
+// (20 MHz) towards the secondary for 40 MHz. Unknown width counts as 20 MHz.
+void apBlock(const ApRecord& r, int& lo, int& hi) {
+    lo = hi = r.channel;
+    if (r.width == 40) {
+        if (r.secondary > 0) hi += 4;
+        if (r.secondary < 0) lo -= 4;
+    }
+}
+
+// Share of channel c that the AP's spectrum covers. Each 20 MHz block is modelled as
+// +-2.5 channels (~22 MHz), so for 20 MHz this is 1 - 0.2*d (d = channels apart).
+float overlapWeight(int c, int lo, int hi) {
+    float a = max(c - 2.5f, lo - 2.5f), b = min(c + 2.5f, hi + 2.5f);
+    return b > a ? (b - a) / 5.0f : 0.0f;
 }
 
 // Stronger neighbours cost more airtime/contention than barely audible ones.
@@ -53,8 +64,15 @@ uint8_t analyzeChannels(ChannelStat out[kChannels]) {
     }
     for (uint8_t c = 0; c < kChannels; c++) {
         if (out[c].aps) out[c].avgRssi = (int8_t)lroundf((float)sum[c] / out[c].aps);
-        for (uint8_t o = 0; o < kChannels; o++) {
-            if (o != c && abs(o - c) <= 4) out[c].overlapping += out[o].aps;
+    }
+    // Overlapping: APs on other primary channels whose spectrum reaches this channel
+    for (uint16_t i = 0; i < n; i++) {
+        const ApRecord& r = recs[i];
+        if (!Scanner::isPresent(r) || r.channel < 1 || r.channel > kChannels) continue;
+        int lo, hi;
+        apBlock(r, lo, hi);
+        for (int c = max(1, lo - 4); c <= min((int)kChannels, hi + 4); c++) {
+            if (c != r.channel && overlapWeight(c, lo, hi) > 0) out[c - 1].overlapping++;
         }
     }
 
@@ -68,8 +86,10 @@ uint8_t analyzeChannels(ChannelStat out[kChannels]) {
             int8_t v = r.live[slot];
             if (v == RSSI_NONE || r.channel < 1 || r.channel > 13) continue;
             float sw = signalWeight(v);
-            for (int c = max(1, r.channel - 4); c <= min(13, r.channel + 4); c++) {
-                out[c - 1].load += overlapWeight(c - r.channel) * sw;
+            int lo, hi;
+            apBlock(r, lo, hi);
+            for (int c = max(1, lo - 4); c <= min(13, hi + 4); c++) {
+                out[c - 1].load += overlapWeight(c, lo, hi) * sw;
             }
         }
     }

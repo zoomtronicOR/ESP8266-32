@@ -165,7 +165,7 @@ const Charts = (() => {
 
     geometry(w, h) {
       const pad = { l: 44, r: 12, t: 14, b: 34 };
-      const xMax = this.nets.some((n) => n.channel === 14) ? 16 : 15;
+      const xMax = Math.max(this.nets.some((n) => n.channel === 14) ? 16 : 15, ...this.nets.map((n) => this.span(n)[1] + 3));
       const xMin = -1;
       const strongest = Math.max(-30, ...this.nets.map((n) => n.rssi));
       const yMax = Math.ceil((strongest + 10) / 10) * 10;
@@ -176,9 +176,17 @@ const Charts = (() => {
     }
 
     // Shape of a 20 MHz channel (+-2 channels), flat top, steep skirts.
-    // Width is an assumption: a standard scan does not report channel width.
+    // Channels the AP is centred on: [primary, primary] for 20 MHz, extended by 4 channels
+    // towards the secondary for 40 MHz. Unknown width (ESP8266) is drawn as 20 MHz.
+    span(n) {
+      const w40 = n.width === 40;
+      return [n.channel - (w40 && n.secondary < 0 ? 4 : 0), n.channel + (w40 && n.secondary > 0 ? 4 : 0)];
+    }
+
+    // Flat top over the span, steep skirts 2 channels (10 MHz) beyond it.
     level(n, ch, yMin) {
-      const d = Math.abs(ch - n.channel);
+      const [a, b] = this.span(n);
+      const d = ch < a ? a - ch : ch > b ? ch - b : 0;
       if (d >= 2) return yMin;
       return yMin + (n.rssi - yMin) * (1 - Math.pow(d / 2, 4));
     }
@@ -260,7 +268,8 @@ const Charts = (() => {
         if (!this.slots.has(n.bssid) && !(hovered && hovered.bssid === n.bssid)) continue;
         const label = n.ssid || '(hidden)';
         const tw = ctx.measureText(label).width;
-        const x = X(n.channel), y = Y(n.rssi) - 4;
+        const [sa, sb] = this.span(n);
+        const x = X((sa + sb) / 2), y = Y(n.rssi) - 4;
         const b = { x0: x - tw / 2 - 2, x1: x + tw / 2 + 2, y0: y - 14, y1: y };
         if (boxes.some((o) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0)) continue;
         boxes.push(b);
@@ -279,8 +288,10 @@ const Charts = (() => {
     hump(ctx, g, n, color, c, emphasized) {
       const { X, Y, yMin } = g;
       ctx.beginPath();
-      for (let i = 0; i <= 48; i++) {
-        const ch = n.channel - 2 + (4 * i) / 48;
+      const [a, b] = this.span(n);
+      const steps = 48 + (b - a) * 12;
+      for (let i = 0; i <= steps; i++) {
+        const ch = a - 2 + ((b - a + 4) * i) / steps;
         const x = X(ch), y = Y(this.level(n, ch, yMin));
         if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
       }
@@ -303,7 +314,8 @@ const Charts = (() => {
       const ch = g.invX(p.x);
       let best = null, bestD = 28;
       for (const n of this.nets) {
-        if (Math.abs(ch - n.channel) >= 2) continue;
+        const [a, b] = this.span(n);
+        if (ch <= a - 2 || ch >= b + 2) continue;
         const d = Math.abs(g.Y(this.level(n, ch, g.yMin)) - p.y);
         if (d < bestD) { best = n; bestD = d; }
       }
@@ -315,7 +327,7 @@ const Charts = (() => {
       this.showTip(p.x, p.y, [
         { text: best.ssid || '(hidden)', strong: true, color: this.colorOf(best) || css('--muted') },
         { text: best.bssid },
-        { text: `Channel ${best.channel} · ${best.rssi} dBm · ${best.security}` },
+        { text: `Channel ${best.channel}${best.width === 40 ? ` + ${best.channel + 4 * best.secondary} (40 MHz)` : best.width ? ' (20 MHz)' : ''} · ${best.rssi} dBm · ${best.security}` },
       ]);
     }
 

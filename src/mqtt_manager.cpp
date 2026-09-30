@@ -238,7 +238,12 @@ void networksJson(const String& ts, Sink sink) {
         s += r.rssi;
         s += F(",\"security\":\"");
         s += securityName(r.enc);
-        s += F("\"}");
+        s += '"';
+        if (r.width) {
+            s += F(",\"width\":");
+            s += r.width;
+        }
+        s += '}';
         sink(s);
     }
     sink(F("]}"));

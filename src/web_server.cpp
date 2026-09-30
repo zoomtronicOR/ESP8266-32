@@ -240,6 +240,7 @@ void handleStatus() {
     scan["tracked"] = Scanner::count();
     scan["max_aps"] = Scanner::capacity();
     scan["strong_rssi"] = STRONG_RSSI_DBM;
+    scan["width_reported"] = Platform::scanReportsWidth();
 
     JsonObject ui = d["ui"].to<JsonObject>();
     ui["theme"] = config.uiTheme;
@@ -349,6 +350,11 @@ void handleNetworks() {
                Scanner::isNew(r) ? "true" : "false");
         w.addf(PSTR("\"first_seen_ago\":%lu,\"last_seen_ago\":%lu,"), (unsigned long)(now - r.firstSeen),
                (unsigned long)(now - r.lastSeen));
+        if (r.width) {
+            w.addf(PSTR("\"width\":%u,\"secondary\":%d,"), r.width, r.secondary);
+        } else {
+            w.add("\"width\":null,\"secondary\":0,");
+        }
         if (haveTime) {
             w.addf(PSTR("\"first_seen\":\"%s\",\"last_seen\":\"%s\"}"), first, last);
         } else {

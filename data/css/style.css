@@ -39,6 +39,8 @@
 }
 
 * { box-sizing: border-box; }
+/* the hidden attribute must win over component display rules (badge, widgets, ...) */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);

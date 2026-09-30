@@ -315,6 +315,11 @@ function renderDashboard() {
     $('#dash-scan-info').textContent = info;
   }
   charts.spectrum.setData(presentNetworks(), st ? st.scan.strong_rssi : null);
+  if (st) {
+    $('#spectrum-note').textContent = st.scan.width_reported
+      ? 'Each network is drawn with the channel width reported by the scan: 20 MHz (±2 channels) or 40 MHz (primary + secondary channel).'
+      : "Each network is drawn as a 20 MHz channel (±2 channels). This board's WiFi scan does not report the real channel width.";
+  }
   renderChannelBars();
   renderTopTable();
 }
@@ -380,6 +385,16 @@ function renderChannelBars() {
       c.aps ? `${c.aps} AP · avg ${c.avg} · max ${c.max}` : '0 AP');
     chart.append(label, el('div', { class: 'chan-track' }, bar), text);
   }
+}
+
+// 20 / 40 MHz from the scan (ESP32); the ESP8266 scan cannot report it
+function fmtWidth(n) {
+  if (!n.width) return 'Unknown';
+  return n.width === 40 ? `40 MHz ${n.secondary > 0 ? '+' : '−'}` : '20 MHz';
+}
+function widthTitle(n) {
+  if (!n.width) return "This board's WiFi scan does not report the channel width";
+  return n.width === 40 ? `Primary channel ${n.channel}, secondary ${n.channel + 4 * n.secondary}` : `Channel ${n.channel} only`;
 }
 
 function ssidCell(n) {
@@ -462,6 +477,7 @@ function renderNetworks() {
       ssidCell(n),
       el('td', { class: 'mono' }, n.bssid),
       el('td', { class: 'num' }, n.channel),
+      el('td', { class: 'num', title: widthTitle(n) }, fmtWidth(n)),
       el('td', { class: 'num' }, n.rssi),
       el('td', { class: 'num' }, n.rssi_min),
       el('td', { class: 'num' }, n.rssi_max),

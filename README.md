@@ -37,11 +37,11 @@ platform layer.
 **Scanning & statistics**
 - Periodic asynchronous WiFi scan (10 s – 30 min, or manual), optionally limited to one channel
 - Per access point: SSID, BSSID, channel, frequency, security, hidden flag, current / min / max / average
-  RSSI, first/last seen, seen count
+  RSSI, first/last seen, seen count, and on the ESP32-C3 the channel width (20/40 MHz) and WPA3
 - Up to 100 tracked APs by default (configurable)
 
 **Web interface** (served from the device, vanilla JS + canvas charts)
-- **Dashboard**: summary widgets, *signal strength by channel* chart (each AP drawn as a 20 MHz hump),
+- **Dashboard**: summary widgets, *signal strength by channel* chart (each AP drawn with its 20/40 MHz width),
   channel occupancy, strongest networks. Widgets can be hidden per browser
 - **Networks**: sortable/filterable table, search, pagination, CSV/JSON export
 - **Channels**: APs per channel, signal range, overlap, *estimated* congestion and a recommended channel
@@ -99,9 +99,10 @@ scan can see and labels anything else as **Detected**, **Estimated** or **Unknow
 - **2.4 GHz only** (both boards). 5 GHz and 6 GHz networks are not visible.
 - **No real airtime/channel utilization.** Congestion is an *estimate* from detected APs, their signal
   strength, 20 MHz channel overlap and repeated scans.
-- **Channel width is not reported** by the scan. Charts assume 20 MHz.
-- **ESP8266 only**: WPA3 cannot be distinguished (reported as WPA2), no Bluetooth, no TLS for MQTT (not
-  enough free RAM).
+- **Channel width**: reported by the ESP32-C3 scan (20/40 MHz). The ESP8266 scan does not report it, so there
+  charts assume 20 MHz and the table shows *Unknown*.
+- **ESP8266 only**: WPA3 cannot be distinguished (reported as WPA2), channel width unknown, no Bluetooth, no
+  TLS for MQTT (not enough free RAM).
 - WiFi and BLE share one radio on the ESP32-C3, so WiFi and BLE scans take turns.
 
 The web interface has **no login**. The device is meant for a trusted local network only. **Never expose
@@ -233,7 +234,7 @@ docs/images/    README screenshots (invented demo data)
 - [x] Phase 4: alerts, new AP detection, channel analysis, heatmap
 - [x] Phase 5: OTA, captive portal, advanced settings (web login intentionally left out: LAN-only device)
 - [x] ESP32-C3 version with BLE: BTHome, BLE scan, GATT (same web UI and MQTT structure)
-- [ ] Channel width (20/40 MHz) and more from the ESP32 scan data
+- [x] Channel width (20/40 MHz) from the ESP32 scan, used in charts and congestion estimates
 
 ---
 

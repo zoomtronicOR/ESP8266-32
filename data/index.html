@@ -95,7 +95,7 @@
       </div>
       <div class="chart-box"><canvas class="chart chart-tall" id="spectrum"></canvas><div class="chart-tip" hidden></div></div>
       <div class="legend" id="spectrum-legend"></div>
-      <p class="muted small note">Each network is drawn as a 20 MHz channel (±2 channels). A standard WiFi scan does not report the real channel width.</p>
+      <p class="muted small note" id="spectrum-note">Each network is drawn as a 20 MHz channel (±2 channels). A standard WiFi scan does not report the real channel width.</p>
     </div>
 
     <div class="card">
@@ -135,6 +135,7 @@
             <th data-sort="ssid">SSID</th>
             <th data-sort="bssid">BSSID</th>
             <th data-sort="channel" class="num">CH</th>
+            <th data-sort="width" class="num">Width</th>
             <th data-sort="rssi" class="num">RSSI</th>
             <th data-sort="rssi_min" class="num">Min</th>
             <th data-sort="rssi_max" class="num">Max</th>
@@ -180,7 +181,7 @@
     <div class="card">
       <div class="card-head">
         <h2>Channel analysis</h2>
-        <span class="muted small">Counts are observed in the latest scan. Load and congestion are estimates from detected APs, signal strength and ±4 channel overlap (20 MHz assumed), averaged over recent scans. They are not airtime measurements.</span>
+        <span class="muted small">Counts are observed in the latest scan. Load and congestion are estimates from detected APs, signal strength and channel overlap (each AP's reported width, 20 MHz where unknown), averaged over recent scans. They are not airtime measurements.</span>
       </div>
       <div class="table-wrap">
         <table id="chan-table">

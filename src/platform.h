@@ -45,6 +45,8 @@ String macSuffix();  // last 2 bytes of the WiFi MAC as 4 hex digits (valid befo
 void wifiPrepare(const char* hostname);  // before mode()/begin(): hostname, no power save
 void startScan(uint8_t channel);         // async, include hidden; channel 0 = all
 bool scanHidden(int i);
+bool scanReportsWidth();                              // true when scanWidth() is real data
+void scanWidth(int i, uint8_t& width, int8_t& secondary);  // 20/40 MHz, secondary +1 above / -1 below
 bool encIsOpen(uint8_t enc);
 const char* securityName(uint8_t enc);
 bool staWrongPassword();                 // last connect attempt failed on the password

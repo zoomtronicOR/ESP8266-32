@@ -14,6 +14,7 @@
 #define BOARD_ID   "esp32c3"
 #define MAX_TRACKED_APS_LIMIT 300
 #define FEATURE_BLE_NATIVE 1       // built-in Bluetooth LE radio
+#define FEATURE_CHANNEL_WIDTH 1    // scan reports 20/40 MHz (HT40 secondary channel)
 #else
 #error "Add a board block to include/config.h"
 #endif
@@ -128,6 +129,6 @@
 // #define FEATURE_WIFI_5GHZ       1   // 5 GHz scanning (ESP32-C5 / dedicated radio)
 // #define FEATURE_WIFI_6GHZ       1   // 6 GHz / WiFi 6E scanning
 // #define FEATURE_AIRTIME_UTIL    1   // real channel airtime utilization (needs RF sniffer)
-// #define FEATURE_CHANNEL_WIDTH   1   // reliable remote-AP channel width from scan results
+// FEATURE_CHANNEL_WIDTH: set in the board block for boards whose scan reports it (ESP32)
 // #define FEATURE_WPA3_DETECTION  1   // ESP8266 scan reports only NONE/WEP/TKIP/CCMP/AUTO
 // #define FEATURE_MQTT_TLS        1   // BearSSL needs ~20 KB heap; only ~22 KB are free at runtime
