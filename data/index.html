@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP WiFi Monitor</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="dot" id="hdr-dot"></span>
+    <div>
+      <div class="title">ESP WiFi Monitor</div>
+      <div class="sub" id="hdr-device">—</div>
+      <div class="sub" id="hdr-link"></div>
+      <div class="sub" id="hdr-scan"></div>
+    </div>
+  </div>
+  <nav>
+    <a href="/" data-page="dashboard">Dashboard</a>
+    <a href="/networks" data-page="networks">Networks</a>
+    <a href="/channels" data-page="channels">Channels</a>
+    <a href="/history" data-page="history">History</a>
+    <a href="/alerts" data-page="alerts">Alerts<span class="badge" id="nav-badge" hidden></span></a>
+    <a href="/wifi" data-page="wifi">WiFi</a>
+    <a href="/mqtt" data-page="mqtt">MQTT</a>
+    <a href="/update" data-page="update">Update</a>
+    <a href="/settings" data-page="settings">Settings</a>
+    <a href="/system" data-page="system">System</a>
+  </nav>
+  <div class="clock" id="hdr-clock" title="Device time (NTP)">
+    <div class="clock-time" id="clock-time">--:--:--</div>
+    <div class="clock-date" id="clock-date">time not synced</div>
+  </div>
+  <label class="refresh" title="How often this page asks the device for new data">
+    Refresh
+    <select id="refresh">
+      <option value="0">Paused</option>
+      <option value="2">2 s</option>
+      <option value="5">5 s</option>
+      <option value="10">10 s</option>
+      <option value="30">30 s</option>
+      <option value="60">60 s</option>
+    </select>
+  </label>
+  <button class="icon-btn" id="theme-btn" title="Toggle theme">◐</button>
+</header>
+
+<div class="banner" id="banner" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<main>
+  <!-- Dashboard -->
+  <section id="page-dashboard" class="page">
+    <div class="dash-tools">
+      <button type="button" class="secondary small-btn" id="w-custom">Customize dashboard</button>
+    </div>
+    <div class="card w-panel" id="w-panel" hidden>
+      <h2>Show on the dashboard</h2>
+      <div class="w-checks" id="w-checks"></div>
+      <p class="muted small">Saved in this browser.</p>
+    </div>
+    <div class="widgets">
+      <div class="widget"><div class="w-label">Detected APs</div><div class="w-value" id="w-aps">—</div></div>
+      <div class="widget"><div class="w-label">Channels used</div><div class="w-value" id="w-channels">—</div></div>
+      <div class="widget"><div class="w-label">Strongest AP</div><div class="w-value" id="w-strongest">—</div></div>
+      <div class="widget"><div class="w-label">Open networks</div><div class="w-value" id="w-open">—</div></div>
+      <div class="widget"><div class="w-label">Hidden SSIDs</div><div class="w-value" id="w-hidden">—</div></div>
+      <div class="widget"><div class="w-label">New APs</div><div class="w-value" id="w-new">—</div></div>
+      <div class="widget"><div class="w-label">Device RSSI</div><div class="w-value" id="w-rssi">—</div></div>
+      <div class="widget"><div class="w-label">Uptime</div><div class="w-value" id="w-uptime">—</div></div>
+      <a class="widget widget-link" href="/alerts" data-page="alerts"><div class="w-label">Unread alerts</div><div class="w-value" id="w-alerts">—</div></a>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Signal strength by channel</h2>
+        <div class="controls">
+          <label class="small">Scan every
+            <select id="dash-scan-interval">
+              <option value="10">10 s</option>
+              <option value="30">30 s</option>
+              <option value="60">60 s</option>
+              <option value="300">5 min</option>
+              <option value="600">10 min</option>
+              <option value="1800">30 min</option>
+            </select>
+          </label>
+          <button class="secondary small-btn" id="dash-scan">Scan now</button>
+          <span class="muted small" id="dash-scan-info"></span>
+        </div>
+      </div>
+      <div class="chart-box"><canvas class="chart chart-tall" id="spectrum"></canvas><div class="chart-tip" hidden></div></div>
+      <div class="legend" id="spectrum-legend"></div>
+      <p class="muted small note">Each network is drawn as a 20 MHz channel (±2 channels). A standard WiFi scan does not report the real channel width.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>2.4 GHz channel occupancy</h2>
+        <span class="muted small">Detected AP density, not airtime utilization</span>
+      </div>
+      <div class="chan-chart" id="chan-chart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Strongest networks</h2>
+        <a href="/networks" data-page="networks" class="small">All networks →</a>
+      </div>
+      <div class="table-wrap"><table class="net-table" id="top-table"><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- Networks -->
+  <section id="page-networks" class="page" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <input type="search" id="f-search" placeholder="Search SSID, BSSID, security…">
+        <select id="f-channel"><option value="">All channels</option></select>
+        <label><input type="checkbox" id="f-strong"> Strong only</label>
+        <label><input type="checkbox" id="f-new"> New only</label>
+        <label><input type="checkbox" id="f-gone"> Include not currently visible</label>
+        <span class="spacer"></span>
+        <button id="btn-scan">Scan now</button>
+        <button id="btn-csv" class="secondary">Export CSV</button>
+        <button id="btn-json" class="secondary">Export JSON</button>
+      </div>
+      <div class="table-wrap">
+        <table class="net-table sortable clickable" id="net-table">
+          <thead><tr>
+            <th data-sort="ssid">SSID</th>
+            <th data-sort="bssid">BSSID</th>
+            <th data-sort="channel" class="num">CH</th>
+            <th data-sort="rssi" class="num">RSSI</th>
+            <th data-sort="rssi_min" class="num">Min</th>
+            <th data-sort="rssi_max" class="num">Max</th>
+            <th data-sort="rssi_avg" class="num">Avg</th>
+            <th>Quality</th>
+            <th data-sort="security">Security</th>
+            <th data-sort="seen" class="num">Seen</th>
+            <th data-sort="first_seen_ago" class="num">First seen</th>
+            <th data-sort="last_seen_ago" class="num">Last seen</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span id="pager-info" class="muted small"></span>
+        <span class="spacer"></span>
+        <button class="secondary" id="pg-prev">‹ Prev</button>
+        <button class="secondary" id="pg-next">Next ›</button>
+      </div>
+      <p class="muted small note">Click a network to see its signal history.</p>
+    </div>
+  </section>
+
+  <!-- Channels -->
+  <section id="page-channels" class="page" hidden>
+    <div class="card reco" id="chan-reco"></div>
+    <div class="widgets" id="sec-widgets"></div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2>Access points per channel</h2></div>
+        <div class="legend" id="bars-legend"></div>
+        <div class="chart-box"><canvas class="chart" id="chan-bars"></canvas><div class="chart-tip" hidden></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Signal range per channel</h2></div>
+        <div class="legend">
+          <span class="lg-item"><span class="sw sw-range"></span>Min to max</span>
+          <span class="lg-item"><span class="sw sw-dot"></span>Average</span>
+        </div>
+        <div class="chart-box"><canvas class="chart" id="chan-range"></canvas><div class="chart-tip" hidden></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Channel analysis</h2>
+        <span class="muted small">Counts are observed in the latest scan. Load and congestion are estimates from detected APs, signal strength and ±4 channel overlap (20 MHz assumed), averaged over recent scans. They are not airtime measurements.</span>
+      </div>
+      <div class="table-wrap">
+        <table id="chan-table">
+          <thead><tr>
+            <th class="num">CH</th><th class="num">MHz</th><th class="num">APs</th><th class="num">Strong</th>
+            <th class="num">Avg RSSI</th><th class="num">Max RSSI</th><th class="num">Min RSSI</th><th class="num">Overlapping APs</th>
+            <th class="num">Est. load</th><th>Congestion (estimated)</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- History -->
+  <section id="page-history" class="page" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <div class="seg" id="hist-range"></div>
+        <span class="spacer"></span>
+        <span class="muted small" id="hist-info"></span>
+      </div>
+      <div class="banner-inline" id="hist-note" hidden></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-head"><h2>Detected networks</h2></div>
+        <div class="legend" id="hist-count-legend"></div>
+        <div class="chart-box"><canvas class="chart" id="hist-count"></canvas><div class="chart-tip" hidden></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Signal strength</h2></div>
+        <div class="legend" id="hist-rssi-legend"></div>
+        <div class="chart-box"><canvas class="chart" id="hist-rssi"></canvas><div class="chart-tip" hidden></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Channel heatmap</h2>
+        <span class="muted small">Detected APs per channel over time</span>
+      </div>
+      <div class="heat-legend" id="heat-legend"></div>
+      <div class="chart-box"><canvas class="chart" id="heatmap"></canvas><div class="chart-tip" hidden></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Signal history of one access point</h2>
+        <select id="hist-ap"></select>
+      </div>
+      <div class="chart-box"><canvas class="chart" id="hist-ap-chart"></canvas><div class="chart-tip" hidden></div></div>
+      <dl class="kv kv-inline" id="hist-ap-stats"></dl>
+    </div>
+  </section>
+
+  <!-- Alerts -->
+  <section id="page-alerts" class="page" hidden>
+   <div class="side-grid">
+   <div>
+    <div class="card">
+      <div class="toolbar">
+        <select id="alert-filter">
+          <option value="">All alerts</option>
+          <option value="ap">Access points</option>
+          <option value="channel">Channels</option>
+          <option value="system">System</option>
+        </select>
+        <label><input type="checkbox" id="alert-unread"> Unread only</label>
+        <span class="spacer"></span>
+        <span class="muted small" id="alert-count"></span>
+        <button class="secondary" id="alert-ack">Mark all as read</button>
+      </div>
+      <div class="alert-list" id="alert-list"></div>
+    </div>
+   </div>
+   <div>
+    <form id="alert-form" class="card form wide" autocomplete="off">
+      <h2>Alert settings</h2>
+      <label class="check"><input type="checkbox" name="alert_new_ap"> New access point (never seen by this device before)</label>
+      <label class="check"><input type="checkbox" name="alert_open_ap"> New open (unencrypted) network</label>
+      <label class="check"><input type="checkbox" name="alert_strong_ap"> New very strong nearby access point</label>
+      <label>Very strong means at least (dBm) <input name="alert_strong_rssi" type="number" min="-70" max="-20" required></label>
+      <label class="check"><input type="checkbox" name="alert_density"> High AP density on a channel</label>
+      <label>High density means at least (APs on one channel) <input name="alert_density_aps" type="number" min="2" max="50" required></label>
+      <label class="check"><input type="checkbox" name="alert_system"> System: WiFi or MQTT outage, low memory, crash or watchdog restarts</label>
+      <div class="form-actions">
+        <button type="submit">Save</button>
+        <span id="alert-msg" class="small"></span>
+      </div>
+    </form>
+    <div class="card guide">
+      <h2>How alerts work</h2>
+      <ul>
+        <li><b>New access point</b>: the device remembers every access point it has ever seen, also across
+          restarts. The first scan after setup or a factory reset only learns what is already around; after that
+          only really new access points raise an alert (at most 5 per scan).</li>
+        <li><b>Open network</b> and <b>very strong AP</b> are checked when a new access point appears.</li>
+        <li><b>High density</b> fires when a channel reaches the limit, and again only after it has dropped below it.</li>
+        <li><b>System</b>: WiFi outages longer than 30 s (reported after reconnecting), the MQTT broker down for
+          more than a minute, free memory below 6 KB, and restarts caused by the watchdog or a crash. Three such
+          restarts in a row raise a restart-loop alert.</li>
+        <li>The last 24 alerts are kept, also across restarts. A factory reset clears them.</li>
+      </ul>
+      <h3>Where alerts go</h3>
+      <ul>
+        <li>This page, plus a pop-up on any page of this interface while it is open.</li>
+        <li>MQTT topic <code id="alert-topic">…/alerts</code>. In Home Assistant this is the <i>Alert</i> event
+          entity, with one event type per alert type (<code>new_ap</code>, <code>open_ap</code>,
+          <code>strong_ap</code>, <code>channel_density</code>, ...).</li>
+        <li>The Home Assistant <i>Alert</i> binary sensor is on while there are unread warnings or critical
+          alerts. The <i>Mark alerts as read</i> button in Home Assistant clears it, like the button on this page.</li>
+      </ul>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- WiFi setup -->
+  <section id="page-wifi" class="page" hidden>
+    <div class="card form wide">
+      <h2>WiFi connection</h2>
+      <div id="wifi-current" class="wifi-current"></div>
+      <div id="wifi-progress" class="wifi-progress" hidden></div>
+    </div>
+    <div class="card form wide">
+      <div class="card-head">
+        <h2>Choose a network</h2>
+        <button class="secondary small-btn" id="wifi-rescan">Rescan</button>
+      </div>
+      <div id="wifi-list" class="wifi-list"></div>
+      <details class="wifi-manual">
+        <summary>Hidden network / enter name manually</summary>
+        <form id="wifi-manual-form" autocomplete="off">
+          <label>Network name (SSID) <input name="ssid" maxlength="32" required></label>
+          <label>Password <input name="password" type="password" maxlength="63" placeholder="leave empty for an open network"></label>
+          <button type="submit">Connect</button>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <!-- MQTT / Home Assistant -->
+  <section id="page-mqtt" class="page" hidden>
+   <div class="side-grid three">
+   <div>
+    <div class="card form wide">
+      <h2>MQTT status</h2>
+      <dl class="kv" id="mqtt-kv"></dl>
+    </div>
+    <form id="mqtt-form" class="card form wide" autocomplete="off">
+      <h2>Broker</h2>
+      <label class="check"><input type="checkbox" name="mqtt_enabled"> Enable MQTT</label>
+      <label>Broker (host name or IP) <input name="mqtt_host" maxlength="64" placeholder="192.168.0.10"></label>
+      <label>Port <input name="mqtt_port" type="number" min="1" max="65535" required></label>
+      <label>Username <input name="mqtt_user" maxlength="64" autocomplete="off"></label>
+      <label>Password <input name="mqtt_password" type="password" maxlength="64" autocomplete="new-password"></label>
+      <label class="check"><input type="checkbox" name="mqtt_password_clear"> Remove saved password</label>
+      <label>Client ID <input name="mqtt_client_id" maxlength="32"></label>
+      <label>Base topic <input name="mqtt_topic" maxlength="64"></label>
+      <p class="muted small">TLS is not available: it needs more free RAM than this board has.</p>
+
+      <h2>Home Assistant</h2>
+      <label class="check"><input type="checkbox" name="mqtt_discovery"> MQTT discovery (entities appear in Home Assistant automatically)</label>
+      <label>Discovery prefix <input name="mqtt_discovery_prefix" maxlength="64" required></label>
+
+      <h2>Published data &amp; privacy</h2>
+      <label class="check"><input type="checkbox" name="mqtt_publish_networks"> Publish the list of detected networks</label>
+      <label class="check"><input type="checkbox" name="privacy_hide_ssid"> Do not publish SSIDs</label>
+      <label class="check"><input type="checkbox" name="privacy_anon_bssid"> Anonymize BSSIDs (AP-XXXX)</label>
+      <p class="muted small">Privacy options apply to MQTT only. The local web interface always shows full data.</p>
+
+      <div class="form-actions">
+        <button type="submit">Save</button>
+        <span id="mqtt-msg" class="small"></span>
+      </div>
+    </form>
+   </div>
+   <div>
+    <div class="card guide">
+      <h2>Connecting to Home Assistant</h2>
+      <ol>
+        <li>
+          <b>MQTT broker.</b> In Home Assistant open <i>Settings → Add-ons → Add-on store</i>, install
+          <b>Mosquitto broker</b> and start it. Skip this step if you already run a broker.
+        </li>
+        <li>
+          <b>User for this device.</b> <i>Settings → People → Users → Add user</i> (turn on
+          <i>Advanced mode</i> in your profile if the Users tab is missing), e.g. <code>wifimonitor</code>
+          with a password. The Mosquitto add-on accepts Home Assistant users.
+        </li>
+        <li>
+          <b>MQTT integration.</b> <i>Settings → Devices &amp; services</i>: Home Assistant usually offers
+          <b>MQTT</b> as discovered, so click <i>Configure → Submit</i>. Otherwise use <i>Add integration → MQTT</i>.
+        </li>
+        <li>
+          <b>This page.</b> Turn on <i>Enable MQTT</i>. Set <i>Broker</i> to the IP address of Home Assistant
+          (or of your broker), <i>Port</i> <code>1883</code>, and the user name and password from step 2.
+          Keep <i>MQTT discovery</i> on with prefix <code>homeassistant</code>, then press <b>Save</b>.
+        </li>
+        <li>
+          <b>Check.</b> <i>MQTT status</i> should show <span class="msg-ok">connected</span>. In Home Assistant
+          open <i>Settings → Devices &amp; services → MQTT → Devices → <span id="guide-device">wifi-monitor-01</span></i>.
+          You will see the sensors, the <i>Scan now</i> button and the <i>New access point</i> event.
+        </li>
+      </ol>
+      <h3>If it does not connect</h3>
+      <ul>
+        <li><i>bad username/password</i>: check the user from step 2, or the logins in the Mosquitto add-on.</li>
+        <li><i>broker unreachable</i>: wrong IP or port, the broker is not running, or a firewall blocks port 1883.</li>
+        <li>Connected but no device in Home Assistant: the discovery prefix must match the MQTT integration
+          settings (default <code>homeassistant</code>).</li>
+      </ul>
+      <h3>Example automation: notify on a new access point</h3>
+      <pre class="yaml" id="guide-yaml"></pre>
+    </div>
+    <div class="card form wide">
+      <h2>Topics</h2>
+      <p class="muted small">Values are JSON. Send <code>scan</code> to <code id="mqtt-cmd-topic"></code> to start a scan.</p>
+      <ul class="topic-list" id="mqtt-topics"></ul>
+    </div>
+   </div>
+   <div>
+    <div class="card guide">
+      <h2>Charts in a Home Assistant dashboard</h2>
+      <p>
+        The device serves chart-only pages that a Home Assistant <b>Webpage</b> card can show: the same
+        charts as on the Dashboard and Channels pages here.
+      </p>
+      <ol>
+        <li>Open a dashboard in Home Assistant and choose <i>⋮ → Edit dashboard</i>.</li>
+        <li>Click <i>+ Add card</i>, scroll to the bottom and choose <i>Manual</i>.</li>
+        <li>Paste one of the cards below and press <b>Save</b>.</li>
+      </ol>
+      <h3>Signal strength by channel</h3>
+      <pre class="yaml" id="card-spectrum"></pre>
+      <h3>Access points per channel</h3>
+      <pre class="yaml" id="card-channels"></pre>
+      <h3>Options (in the url)</h3>
+      <ul>
+        <li><code>chart=spectrum</code> or <code>chart=channels</code>: which chart to show.</li>
+        <li><code>theme=dark</code>, <code>light</code> or <code>auto</code>: match your Home Assistant theme.</li>
+        <li><code>refresh=10</code>: seconds between checks for a new scan.</li>
+        <li><code>aspect_ratio</code> (card option): card height relative to its width, e.g. <code>70%</code>.</li>
+      </ul>
+      <h3>Good to know</h3>
+      <ul>
+        <li>The chart is loaded straight from the device, so it only works on your local network.</li>
+        <li>If Home Assistant is opened over <b>HTTPS</b> (e.g. remote access), the browser blocks this
+          plain-HTTP page. Use the History graph card below instead.</li>
+        <li>If the chart is empty right after the device restarts, it reloads itself within a few seconds.</li>
+      </ul>
+      <h3>Alternative that works everywhere: History graph</h3>
+      <p class="muted small">Uses the MQTT sensors. Check the exact entity IDs under <i>Settings → Entities</i>
+        (search for <code>wifi_monitor</code>).</p>
+      <pre class="yaml" id="card-history"></pre>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- Update (OTA) -->
+  <section id="page-update" class="page" hidden>
+   <div class="side-grid">
+   <div>
+    <div class="card form wide">
+      <h2>Firmware update</h2>
+      <dl class="kv" id="fw-current"></dl>
+      <label>Firmware file (.bin) <input type="file" id="fw-file" accept=".bin"></label>
+      <div id="fw-info" class="small"></div>
+      <div class="form-actions">
+        <button type="button" id="fw-upload" disabled>Upload and install</button>
+      </div>
+      <div class="progress" id="fw-progress" hidden><div class="progress-fill"></div><span class="progress-pct"></span></div>
+      <div id="fw-msg" class="small"></div>
+    </div>
+    <div class="card form wide">
+      <h2>Web interface files</h2>
+      <p class="muted small">Select the project's <code>data</code> folder. Only web interface files are uploaded;
+        settings, history and alerts on the device are not touched.</p>
+      <label>Folder <input type="file" id="web-dir" webkitdirectory multiple></label>
+      <div id="web-info" class="small"></div>
+      <div class="form-actions">
+        <button type="button" id="web-upload" disabled>Upload files</button>
+      </div>
+      <div class="progress" id="web-progress" hidden><div class="progress-fill"></div><span class="progress-pct"></span></div>
+      <div id="web-msg" class="small"></div>
+    </div>
+   </div>
+   <div>
+    <div class="card guide">
+      <h2>How to update</h2>
+      <h3>Firmware</h3>
+      <ol>
+        <li>Build it on the PC: <code>pio run</code>. The file is
+          <code>.pio/build/nodemcuv2/firmware.bin</code>.</li>
+        <li>Choose the file above. The page reads its version and board before anything is sent, and refuses
+          files that are not ESP WiFi Monitor firmware for this board.</li>
+        <li>Press <b>Upload and install</b>. The device writes the new firmware next to the running one, checks
+          it, and restarts (about 30 seconds). Settings, history and alerts are kept.</li>
+      </ol>
+      <h3>Web interface files</h3>
+      <ol>
+        <li>Choose the <code>data</code> folder of the project and press <b>Upload files</b>.</li>
+        <li>When it is done, reload the page with <b>Ctrl+Shift+R</b> so the browser drops its cached copies.</li>
+      </ol>
+      <p>If a release changes both, update the firmware first, then the web files.</p>
+      <h3>If something goes wrong</h3>
+      <ul>
+        <li>A failed or interrupted upload is never activated; the device keeps running the old firmware.</li>
+        <li>Scans pause while an update is being uploaded.</li>
+        <li>As a last resort, flash over USB: <code>pio run -t upload</code>.</li>
+      </ul>
+      <p class="muted small">Updates are not password protected. This device is meant for a trusted local network
+        only; never expose it to the internet.</p>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="page-settings" class="page" hidden>
+   <div class="side-grid">
+   <div>
+    <form id="cfg-form" class="card form wide" autocomplete="off">
+      <h2>Device</h2>
+      <label>Device name <input name="device_name" maxlength="32" required></label>
+      <label>Hostname (mDNS) <input name="hostname" maxlength="31" required></label>
+      <label>Timezone (POSIX TZ) <input name="timezone" maxlength="48" required></label>
+      <p class="muted small">WiFi network: <a href="/wifi" data-page="wifi">change on the WiFi page →</a></p>
+
+      <h2>Network</h2>
+      <label class="check"><input type="checkbox" name="ip_static"> Use a static IP address (instead of DHCP)</label>
+      <div id="ip-fields">
+        <label>IP address <input name="ip_address" maxlength="15" placeholder="192.168.88.65"></label>
+        <label>Gateway <input name="ip_gateway" maxlength="15" placeholder="192.168.88.1"></label>
+        <label>Subnet mask <input name="ip_subnet" maxlength="15" placeholder="255.255.255.0"></label>
+        <label>DNS server 1 <input name="ip_dns1" maxlength="15" placeholder="empty = gateway"></label>
+        <label>DNS server 2 <input name="ip_dns2" maxlength="15" placeholder="optional"></label>
+      </div>
+
+      <h2>Scanner</h2>
+      <label>Scan interval
+        <select name="scan_interval">
+          <option value="10">10 s</option>
+          <option value="30">30 s</option>
+          <option value="60">60 s</option>
+          <option value="300">5 min</option>
+          <option value="600">10 min</option>
+          <option value="1800">30 min</option>
+        </select>
+      </label>
+      <label>Scan channels
+        <select name="scan_channel">
+          <option value="0">All channels</option>
+          <option value="1">Only channel 1</option><option value="2">Only channel 2</option>
+          <option value="3">Only channel 3</option><option value="4">Only channel 4</option>
+          <option value="5">Only channel 5</option><option value="6">Only channel 6</option>
+          <option value="7">Only channel 7</option><option value="8">Only channel 8</option>
+          <option value="9">Only channel 9</option><option value="10">Only channel 10</option>
+          <option value="11">Only channel 11</option><option value="12">Only channel 12</option>
+          <option value="13">Only channel 13</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="auto_scan"> Automatic periodic scan</label>
+      <label>Max tracked APs <input name="max_aps" type="number" min="10" max="150" required></label>
+
+      <h2>History</h2>
+      <label>History retention
+        <select name="history_hours">
+          <option value="1">1 hour</option>
+          <option value="6">6 hours</option>
+          <option value="12">12 hours</option>
+          <option value="24">24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+        </select>
+      </label>
+
+      <h2>Appearance</h2>
+      <label>Default theme
+        <select name="ui_theme">
+          <option value="auto">Follow the browser / operating system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label>Accent color <input name="ui_accent" type="color"></label>
+
+      <div class="form-actions">
+        <button type="submit">Save</button>
+        <span id="cfg-msg" class="small"></span>
+      </div>
+    </form>
+
+    <div class="card form wide">
+      <h2>Maintenance</h2>
+      <div class="form-actions">
+        <button type="button" class="secondary" id="btn-reboot">Reboot</button>
+        <button type="button" class="danger" id="btn-factory">Factory reset</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="secondary" id="btn-backup">Download backup</button>
+        <label class="file-btn secondary">Restore backup…<input type="file" id="restore-file" accept=".json,application/json" hidden></label>
+        <span id="backup-msg" class="small"></span>
+      </div>
+      <p class="muted small">Factory reset prepares the device for a new owner. It erases the WiFi network, the MQTT
+        broker and credentials, all other settings and the history, and removes the device from Home Assistant
+        (if MQTT is connected). The device then restarts as the setup hotspot. Firmware and web files are kept.</p>
+    </div>
+   </div>
+   <div>
+    <div class="card guide">
+      <h2>About these settings</h2>
+      <h3>Device</h3>
+      <ul>
+        <li><b>Device name</b>: shown in the header and used as the device name in Home Assistant.</li>
+        <li><b>Hostname</b>: the local network name. With the default you can open
+          <code>http://wifi-monitor.local</code> (works on Windows, macOS and iOS; Android usually needs the IP
+          address). Lowercase letters, digits and <code>-</code> only. Takes effect after a reboot.</li>
+        <li><b>Timezone</b>: a POSIX TZ string used for the clock and history timestamps. Takes effect after a
+          reboot. Examples:
+          <ul>
+            <li>Central Europe (Belgrade, Berlin, Paris): <code>CET-1CEST,M3.5.0,M10.5.0/3</code></li>
+            <li>Eastern Europe (Athens, Sofia): <code>EET-2EEST,M3.5.0/3,M10.5.0/4</code></li>
+            <li>UK / Ireland / Portugal: <code>GMT0BST,M3.5.0/1,M10.5.0</code></li>
+            <li>US Eastern: <code>EST5EDT,M3.2.0,M11.1.0</code></li>
+            <li>UTC: <code>UTC0</code></li>
+          </ul>
+        </li>
+        <li>The <b>WiFi network</b> is changed on the <a href="/wifi" data-page="wifi">WiFi page</a>, which
+          lists the networks the device can see.</li>
+      </ul>
+      <h3>Network</h3>
+      <ul>
+        <li><b>Static IP</b>: the device always uses the same address. Pick an address outside your router's
+          DHCP range (or reserve it in the router). Takes effect after a reboot.</li>
+        <li>If the address is wrong, the device is unreachable. Recover it by holding the <b>FLASH</b> button for
+          10 seconds (factory reset), or with the serial console.</li>
+        <li>Choosing a different network on the WiFi page switches back to DHCP automatically.</li>
+      </ul>
+      <h3>Scanner</h3>
+      <ul>
+        <li><b>Scan interval</b>: how often the device scans. A scan takes about 2 seconds and briefly moves
+          the radio off your network's channel, so very short intervals make the web page and MQTT a little
+          slower. 30 s is a good default; the minimum is 10 s.</li>
+        <li><b>Scan channels</b>: <i>All channels</i> is normal. Scanning a single channel is much faster
+          (about 0.1 s) and is useful to watch one channel closely; charts and analysis then only contain that
+          channel.</li>
+        <li><b>Automatic periodic scan</b>: when off, the device scans only when you press <i>Scan now</i>
+          (web page or Home Assistant button).</li>
+        <li><b>Max tracked APs</b>: how many access points the device remembers. Each one uses RAM, so values
+          above 100 leave less memory for the web server and MQTT; check <i>Free heap</i> on the
+          <a href="/system" data-page="system">System page</a>. Takes effect after a reboot.</li>
+      </ul>
+      <h3>History</h3>
+      <ul>
+        <li><b>History retention</b>: how long 5-minute summaries are kept in the device's flash memory. Older
+          data is deleted automatically. The Live view on the History page is always the last 60 scans.</li>
+        <li>Stored history needs the correct time, which the device gets from the internet (NTP). Without
+          internet access only the Live view has data.</li>
+        <li>For long-term history, use Home Assistant: its MQTT sensors are recorded like any other sensor.</li>
+      </ul>
+      <h3>Appearance</h3>
+      <ul>
+        <li><b>Default theme</b> applies to browsers where nobody has used the ◐ button yet. The button choice is
+          remembered per browser.</li>
+        <li><b>Accent color</b>: buttons, links and the selected menu item.</li>
+      </ul>
+      <h3>Maintenance</h3>
+      <ul>
+        <li><b>Reboot</b>: restarts the device. Settings and history are kept.</li>
+        <li><b>Backup</b> downloads all settings as a JSON file. Passwords and the WiFi network are not included;
+          after <b>Restore</b> on another device, pick its network on the WiFi page and enter the MQTT password
+          again.</li>
+        <li>The <b>FLASH</b> button on the board: hold it for 10 seconds while the device is running for a factory
+          reset. The blue LED starts blinking after 3 seconds as a warning.</li>
+        <li><b>Factory reset</b>: use it before giving the device to someone else. Afterwards they connect
+          to the <code>ESP-WIFI-MONITOR-xxxx</code> hotspot with a phone, the setup page opens by itself, and
+          they pick their own WiFi network.</li>
+      </ul>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- System -->
+  <section id="page-system" class="page" hidden>
+    <div class="card">
+      <h2>System information</h2>
+      <dl class="kv" id="sys-kv"></dl>
+    </div>
+  </section>
+</main>
+
+<footer class="muted small">
+  Observed data from standard 2.4 GHz WiFi scans. This is not an RF spectrum analyzer.
+</footer>
+
+<script src="/js/charts.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

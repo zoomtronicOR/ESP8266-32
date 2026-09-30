@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESP WiFi Monitor chart</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  /* Chart-only page for iframes (e.g. a Home Assistant Webpage card).
+     Query: ?chart=spectrum|channels  &theme=auto|dark|light  &bg=transparent  &refresh=<seconds> */
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; padding: 8px 10px 4px; overflow: hidden; }
+  body.transparent { background: transparent; }
+  .embed-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
+  .embed-title { font-weight: 600; font-size: 13px; }
+  .chart-box { flex: 1; min-height: 120px; }
+  .chart-box canvas { height: 100%; }
+  .legend { flex: none; }
+</style>
+</head>
+<body>
+  <div class="embed-head">
+    <span class="embed-title" id="title">Signal strength by channel</span>
+    <span class="muted" id="info"></span>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-box"><canvas class="chart" id="chart"></canvas><div class="chart-tip" hidden></div></div>
+<script src="/js/charts.js"></script>
+<script src="/js/embed.js"></script>
+</body>
+</html>
